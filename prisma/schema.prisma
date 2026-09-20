@@ -1,0 +1,893 @@
+// ============================================================================
+// Maldives Travel Marketplace — Database Schema
+// ============================================================================
+// This is the single source of truth for the database structure.
+// Run `npx prisma migrate dev` after changing this file to create a migration.
+//
+// Design notes (read before modifying):
+// - Money fields use Decimal (maps to Postgres `numeric`) — never Float —
+//   to avoid rounding errors with real currency.
+// - Historical bookings store PRICE SNAPSHOTS (subtotal/tax/fees/commission)
+//   rather than recalculating from current Property/Room prices, so a later
+//   price or commission-rate change never alters a past booking's numbers.
+// - Physical room inventory is modeled as RoomInventoryUnit — a Room is a
+//   *room type* (e.g. "Deluxe Double"); each physical room is a unit. This
+//   lets the booking engine sell each of N physical rooms of the same type
+//   independently instead of treating the room type as a single booking slot.
+// - Overlapping-reservation prevention for the same physical unit is enforced
+//   at the database level with a PostgreSQL EXCLUDE constraint (added in the
+//   raw SQL migration, since Prisma's schema language cannot express EXCLUDE
+//   constraints natively). Application code must also check availability
+//   before writing, but the database is the final authority.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum UserRole {
+  TRAVELER
+  HOST
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum HostVerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum VerificationDocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PropertyStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum MealPlan {
+  ROOM_ONLY
+  BREAKFAST
+  HALF_BOARD
+  FULL_BOARD
+  ALL_INCLUSIVE
+}
+
+enum Currency {
+  USD
+  MVR
+  EUR
+  GBP
+  INR
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PAYMENT_PENDING
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+// ----------------------------------------------------------------------------
+// AUTH & USERS
+// ----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  phone         String?   @unique
+  phoneVerified Boolean   @default(false)
+
+  // Nullable so a future OAuth-only account (Google/Apple) never needs a
+  // local password. Credentials-based accounts always have this set.
+  passwordHash String?
+
+  name      String
+  avatarUrl String?
+  country   String?
+
+  role     UserRole @default(TRAVELER)
+  isActive Boolean  @default(true) // admin can deactivate an account
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Auth.js standard relations (ready for future Google/Apple OAuth)
+  accounts Account[]
+  sessions Session[]
+
+  hostProfile HostProfile?
+
+  bookings           Booking[]          @relation("GuestBookings")
+  reviews            Review[]
+  favorites          Favorite[]
+  sentMessages       Message[]
+  notifications      Notification[]
+  guestConversations Conversation[]     @relation("GuestConversations")
+  hostConversations  Conversation[]     @relation("HostConversations")
+  adminAuditLogs     AdminAuditLog[]    @relation("AdminActor")
+  loginAttempts      LoginAttempt[]
+
+  @@index([role])
+}
+
+// Auth.js standard model — links a user to an OAuth provider account.
+// Unused while only Credentials auth is enabled, kept so Google/Apple can be
+// switched on later without a schema change.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// Auth.js standard model — database session storage. Not used by the
+// Credentials + JWT session strategy today; kept ready for OAuth providers
+// that use database sessions.
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Auth.js standard model — email verification & password-reset tokens.
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Records every login attempt (success or failure) for rate limiting and
+// security auditing. Not exposed to end users.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ipAddress String
+  success   Boolean
+  userId    String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+}
+
+// ----------------------------------------------------------------------------
+// HOST & VERIFICATION
+// ----------------------------------------------------------------------------
+
+model HostProfile {
+  id String @id @default(cuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  businessName               String
+  businessRegistrationNumber String?
+  contactPhone               String
+
+  verificationStatus HostVerificationStatus @default(PENDING)
+  verifiedAt         DateTime?
+  verifiedByAdminId  String?
+
+  // Opaque reference to a payout-provider-managed payout destination
+  // (e.g. a Stripe Connect account id). Never store raw bank account
+  // numbers here — that belongs in the payment provider, not our database.
+  payoutProviderReference String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  verificationDocuments VerificationDocument[]
+  properties            Property[]
+  payouts               Payout[]
+
+  @@index([verificationStatus])
+}
+
+model VerificationDocument {
+  id String @id @default(cuid())
+
+  hostProfileId String
+  hostProfile   HostProfile @relation(fields: [hostProfileId], references: [id], onDelete: Cascade)
+
+  documentType String // e.g. "business_license", "id_document"
+  fileUrl      String
+
+  status           VerificationDocumentStatus @default(PENDING)
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([hostProfileId])
+}
+
+// ----------------------------------------------------------------------------
+// LOCATION HIERARCHY: Country -> Atoll -> Island -> Property
+// ----------------------------------------------------------------------------
+
+model Country {
+  id   String @id @default(cuid())
+  name String @unique
+  code String @unique // ISO 3166-1 alpha-2, e.g. "MV"
+
+  atolls Atoll[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Atoll {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  description String?
+
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  islands Island[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryId])
+}
+
+model Island {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  description String?
+  latitude    Float?
+  longitude   Float?
+
+  atollId String
+  atoll   Atoll  @relation(fields: [atollId], references: [id], onDelete: Restrict)
+
+  properties Property[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([atollId])
+}
+
+// ----------------------------------------------------------------------------
+// PROPERTY TYPES & AMENITIES (lookup tables, not enums, so admins can extend
+// the list later without a schema migration)
+// ----------------------------------------------------------------------------
+
+model PropertyType {
+  id   String @id @default(cuid())
+  name String @unique // "Guesthouse", "Hotel", "Resort", "Villa", ...
+  slug String @unique
+
+  properties Property[]
+}
+
+model Amenity {
+  id       String  @id @default(cuid())
+  name     String  @unique // "Wi-Fi", "Swimming pool", ...
+  slug     String  @unique
+  category String? // "General", "Activities", "Accessibility", ...
+
+  properties PropertyAmenity[]
+  rooms      RoomAmenity[]
+}
+
+// ----------------------------------------------------------------------------
+// PROPERTIES & ROOMS
+// ----------------------------------------------------------------------------
+
+model Property {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  description String @db.Text
+
+  hostProfileId String
+  hostProfile   HostProfile @relation(fields: [hostProfileId], references: [id], onDelete: Restrict)
+
+  islandId String
+  island   Island @relation(fields: [islandId], references: [id], onDelete: Restrict)
+
+  propertyTypeId String
+  propertyType   PropertyType @relation(fields: [propertyTypeId], references: [id], onDelete: Restrict)
+
+  status            PropertyStatus @default(DRAFT)
+  isVerified         Boolean        @default(false)
+  approvedAt         DateTime?
+  approvedByAdminId  String?
+  rejectionReason    String?
+
+  distanceFromBeachMeters  Int?
+  distanceFromHarborMeters Int?
+  checkInTime              String? // e.g. "14:00"
+  checkOutTime             String? // e.g. "12:00"
+
+  latitude  Float?
+  longitude Float?
+  address   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images             PropertyImage[]
+  amenities          PropertyAmenity[]
+  rooms              Room[]
+  reviews            Review[]
+  favorites          Favorite[]
+  conversations      Conversation[]
+  promotions         Promotion[]
+  cancellationPolicy CancellationPolicy?
+  bookings           Booking[]
+
+  @@index([islandId])
+  @@index([status])
+  @@index([hostProfileId])
+}
+
+model PropertyImage {
+  id String @id @default(cuid())
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  url       String
+  altText   String?
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([propertyId])
+}
+
+model PropertyAmenity {
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  amenityId String
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, amenityId])
+}
+
+// A Room is a ROOM TYPE (e.g. "Deluxe Double Room"), not a physical room.
+// Physical inventory lives in RoomInventoryUnit below.
+model Room {
+  id   String @id @default(cuid())
+  name String
+  description String? @db.Text
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  maxOccupancy    Int
+  bedConfiguration String? // e.g. "1 King Bed"
+  sizeSqm          Float?
+  mealPlan         MealPlan @default(ROOM_ONLY)
+
+  basePrice Decimal  @db.Decimal(10, 2)
+  currency  Currency @default(USD)
+
+  minStayNights Int?
+  maxStayNights Int?
+  extraGuestFee Decimal? @db.Decimal(10, 2)
+  extraBedFee   Decimal? @db.Decimal(10, 2)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images         RoomImage[]
+  amenities      RoomAmenity[]
+  inventoryUnits RoomInventoryUnit[]
+  seasonalPrices SeasonalPrice[]
+  bookings       Booking[]
+
+  @@index([propertyId])
+}
+
+model RoomImage {
+  id String @id @default(cuid())
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  url       String
+  altText   String?
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([roomId])
+}
+
+model RoomAmenity {
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  amenityId String
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, amenityId])
+}
+
+// One row per PHYSICAL room belonging to a Room (room type). If "Deluxe
+// Double Room" has 5 physical rooms, there are 5 RoomInventoryUnit rows.
+// This is what lets the booking engine sell up to 5 overlapping reservations
+// for the same room type on the same night — one per unit.
+model RoomInventoryUnit {
+  id String @id @default(cuid())
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  unitLabel String? // internal label, e.g. "Room 101" — optional, host-facing only
+  isActive  Boolean @default(true) // host can retire a unit (e.g. long-term maintenance)
+
+  createdAt DateTime @default(now())
+
+  availabilityBlocks RoomAvailabilityBlock[]
+  bookingUnits        BookingRoomUnit[]
+
+  @@index([roomId])
+}
+
+// Host-defined date blocks for a specific physical unit (maintenance,
+// owner use, manual holds). A date with no block row is available by
+// default unless a confirmed booking already covers it.
+model RoomAvailabilityBlock {
+  id String @id @default(cuid())
+
+  roomInventoryUnitId String
+  roomInventoryUnit   RoomInventoryUnit @relation(fields: [roomInventoryUnitId], references: [id], onDelete: Cascade)
+
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date // exclusive, same convention as bookings
+  reason    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([roomInventoryUnitId, startDate, endDate])
+}
+
+// Date-ranged pricing override for a Room. Falls back to Room.basePrice
+// when no SeasonalPrice row covers a given date.
+model SeasonalPrice {
+  id String @id @default(cuid())
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  name          String? // e.g. "Peak Season", "New Year"
+  startDate     DateTime @db.Date
+  endDate       DateTime @db.Date
+  pricePerNight Decimal  @db.Decimal(10, 2)
+  minStayNights Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roomId, startDate, endDate])
+}
+
+// One combined policy record per property (cancellation + stay rules).
+// Kept as a single model for MVP simplicity per the project's
+// "don't overcomplicate" guidance; can be split later if needed.
+model CancellationPolicy {
+  id String @id @default(cuid())
+
+  propertyId String   @unique
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  freeCancellationDays  Int?     // cancel free if this many days before check-in
+  refundPercentageAfter Int?     // % refunded after the free window (0-100)
+  description           String?  @db.Text
+
+  childrenPolicy   String? @db.Text
+  petsAllowed      Boolean @default(false)
+  smokingAllowed   Boolean @default(false)
+  extraBedPolicy   String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Promotion {
+  id String @id @default(cuid())
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  code          String?      @unique
+  discountType  DiscountType
+  discountValue Decimal      @db.Decimal(10, 2)
+
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([propertyId])
+}
+
+// ----------------------------------------------------------------------------
+// BOOKING ENGINE (schema only in this milestone — no booking UI/API yet)
+// ----------------------------------------------------------------------------
+
+// The raw SQL migration adds a CHECK constraint (checkOutDate > checkInDate)
+// on this table — not expressible in Prisma's schema language, so it isn't
+// visible here, only in prisma/migrations/.../migration.sql.
+model Booking {
+  id                String @id @default(cuid())
+  bookingReference  String @unique // human-friendly code, e.g. "MV-2026-000042"
+
+  guestId String
+  guest   User   @relation("GuestBookings", fields: [guestId], references: [id], onDelete: Restrict)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Restrict)
+
+  checkInDate  DateTime @db.Date
+  checkOutDate DateTime @db.Date // exclusive
+  numGuests    Int
+  numRooms     Int // quantity of inventory units reserved for this booking
+
+  // --- Price snapshot: fixed at booking time, never recalculated ---
+  subtotalAmount        Decimal  @db.Decimal(10, 2)
+  taxAmount              Decimal  @db.Decimal(10, 2) @default(0)
+  serviceFeeAmount        Decimal  @db.Decimal(10, 2) @default(0)
+  discountAmount          Decimal  @db.Decimal(10, 2) @default(0)
+  totalAmount             Decimal  @db.Decimal(10, 2)
+  currency                Currency
+  commissionRateSnapshot  Decimal  @db.Decimal(5, 2) // % at time of booking
+  commissionAmount        Decimal  @db.Decimal(10, 2)
+  hostPayoutAmount        Decimal  @db.Decimal(10, 2)
+
+  status        BookingStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING) // denormalized cache of latest Payment; Payment is the source of truth
+
+  specialRequests String? @db.Text
+
+  cancelledAt        DateTime?
+  cancellationReason String?
+  cancelledByUserId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guests       BookingGuest[]
+  roomUnits    BookingRoomUnit[]
+  payments     Payment[]
+  payout       Payout?
+  review       Review?
+  conversation Conversation?
+
+  @@index([guestId])
+  @@index([propertyId])
+  @@index([roomId])
+  @@index([checkInDate, checkOutDate])
+  @@index([status])
+}
+
+// Assigns a specific physical RoomInventoryUnit to a Booking for its date
+// range. A booking with numRooms = 3 has 3 rows here, each bound to a
+// distinct unit. The raw SQL migration adds a PostgreSQL EXCLUDE constraint
+// on (roomInventoryUnitId, stay date range) WHERE status <> 'CANCELLED' to
+// make overlapping assignments for the same physical unit impossible at the
+// database level — this is the hard guarantee against double-booking.
+model BookingRoomUnit {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  roomInventoryUnitId String
+  roomInventoryUnit   RoomInventoryUnit @relation(fields: [roomInventoryUnitId], references: [id], onDelete: Restrict)
+
+  checkInDate  DateTime @db.Date
+  checkOutDate DateTime @db.Date // exclusive
+
+  // Mirrors Booking.status. Kept in sync by application code inside the same
+  // transaction as any Booking.status change — required so the database
+  // EXCLUDE constraint (added in raw SQL) can exclude cancelled bookings
+  // without a cross-table lookup.
+  status BookingStatus @default(PENDING)
+
+  @@index([roomInventoryUnitId, checkInDate, checkOutDate])
+  @@index([bookingId])
+}
+
+model BookingGuest {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  fullName  String
+  age       Int?
+  isPrimary Boolean @default(false)
+
+  @@index([bookingId])
+}
+
+// ----------------------------------------------------------------------------
+// PAYMENTS & PAYOUTS (kept separate per marketplace requirements)
+// ----------------------------------------------------------------------------
+
+model Payment {
+  id String @id @default(cuid())
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  // Provider is a plain string, not an enum, so new payment providers can be
+  // added later without a migration (payment abstraction layer).
+  provider                    String
+  providerTransactionReference String?
+
+  amount   Decimal       @db.Decimal(10, 2)
+  currency Currency
+  status   PaymentStatus @default(PENDING)
+
+  refundedAmount Decimal @db.Decimal(10, 2) @default(0)
+  failureReason  String?
+  paidAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+}
+
+model Payout {
+  id String @id @default(cuid())
+
+  hostProfileId String
+  hostProfile   HostProfile @relation(fields: [hostProfileId], references: [id], onDelete: Restrict)
+
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  amount   Decimal      @db.Decimal(10, 2)
+  currency Currency
+  status   PayoutStatus @default(PENDING)
+
+  providerReference String?
+  paidAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hostProfileId])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+// REVIEWS
+// ----------------------------------------------------------------------------
+
+// The raw SQL migration adds a CHECK constraint requiring every rating
+// field below to be between 1 and 5 — not expressible in Prisma's schema
+// language, so it isn't visible here, only in the migration.sql file.
+model Review {
+  id String @id @default(cuid())
+
+  bookingId String  @unique // one review per completed booking
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  guestId String
+  guest   User   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  ratingCleanliness   Int
+  ratingLocation      Int
+  ratingStaff         Int
+  ratingFacilities    Int
+  ratingValue         Int
+  ratingCommunication Int
+  overallRating       Decimal @db.Decimal(2, 1) // average of the above, computed on write
+
+  comment String? @db.Text
+
+  hostReply     String?   @db.Text
+  hostRepliedAt DateTime?
+
+  isHidden Boolean @default(false) // admin moderation, soft-hide rather than delete
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([guestId])
+}
+
+// ----------------------------------------------------------------------------
+// FAVORITES
+// ----------------------------------------------------------------------------
+
+model Favorite {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, propertyId])
+}
+
+// ----------------------------------------------------------------------------
+// MESSAGING
+// ----------------------------------------------------------------------------
+
+model Conversation {
+  id String @id @default(cuid())
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  bookingId String?  @unique
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  guestId String
+  guest   User   @relation("GuestConversations", fields: [guestId], references: [id], onDelete: Cascade)
+
+  hostUserId String
+  hostUser   User   @relation("HostConversations", fields: [hostUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@unique([guestId, hostUserId, propertyId])
+  @@index([hostUserId])
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  body   String  @db.Text
+  isRead Boolean @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+// ----------------------------------------------------------------------------
+// NOTIFICATIONS
+// ----------------------------------------------------------------------------
+
+model Notification {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Free-form string, not an enum: the set of notification types will grow
+  // across future modules (transfers, activities, etc.) without needing a
+  // migration each time.
+  type  String
+  title String
+  body  String @db.Text
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+// ----------------------------------------------------------------------------
+// ADMIN AUDIT LOG
+// ----------------------------------------------------------------------------
+
+model AdminAuditLog {
+  id String @id @default(cuid())
+
+  adminUserId String
+  adminUser   User   @relation("AdminActor", fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  action     String // e.g. "PROPERTY_APPROVED", "USER_SUSPENDED"
+  targetType String // e.g. "Property", "User"
+  targetId   String
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([adminUserId])
+  @@index([targetType, targetId])
+}
