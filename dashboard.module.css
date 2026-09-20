@@ -1,0 +1,52 @@
+.shell {
+  min-height: 100vh;
+  background: #f7f9fa;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #e5eaec;
+}
+
+.brand {
+  font-weight: 700;
+  color: #0f2a35;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.userInfo {
+  font-size: 0.875rem;
+  color: #556b70;
+}
+
+.roleBadge {
+  display: inline-block;
+  background: #e6f4f1;
+  color: #0e7c86;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
