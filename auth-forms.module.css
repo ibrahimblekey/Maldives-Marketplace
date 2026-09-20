@@ -1,0 +1,95 @@
+.wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f7f9fa;
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  background: white;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: #0f2a35;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #33474e;
+}
+
+.input {
+  border: 1px solid #d5dde0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.input:focus {
+  outline: 2px solid #0e7c86;
+  outline-offset: 1px;
+  border-color: #0e7c86;
+}
+
+.hint {
+  font-weight: 400;
+  color: #7a8a90;
+  font-size: 0.75rem;
+}
+
+.button {
+  margin-top: 8px;
+  background: #0e7c86;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button:not(:disabled):hover {
+  background: #0b6870;
+}
+
+.error {
+  color: #b3261e;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.footerText {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #556b70;
+  margin: 0;
+}
+
+.footerText a {
+  color: #0e7c86;
+  font-weight: 600;
+}
