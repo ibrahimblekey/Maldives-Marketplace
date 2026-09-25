@@ -74,6 +74,14 @@ enum PropertyImageStatus {
   PENDING_REMOVE
 }
 
+// Monthly commission bill to a host (guests pay the property directly; the
+// platform invoices hosts for its commission afterwards — see
+// src/server/services/commission-service.ts).
+enum CommissionStatementStatus {
+  DUE
+  PAID
+}
+
 enum MealPlan {
   ROOM_ONLY
   BREAKFAST
@@ -254,6 +262,7 @@ model HostProfile {
   verificationDocuments VerificationDocument[]
   properties            Property[]
   payouts               Payout[]
+  commissionStatements  CommissionStatement[]
 
   @@index([verificationStatus])
 }
@@ -648,6 +657,12 @@ model Booking {
   paymentStatus PaymentStatus @default(PENDING) // denormalized cache of latest Payment; Payment is the source of truth
 
   specialRequests String? @db.Text
+  contactPhone    String? // guest's phone for the host, given at booking time
+
+  // Monthly commission bill this booking was charged on (null = not billed
+  // yet, or never billable: cancelled / no-show).
+  commissionStatementId String?
+  commissionStatement   CommissionStatement? @relation(fields: [commissionStatementId], references: [id], onDelete: SetNull)
 
   cancelledAt        DateTime?
   cancellationReason String?
@@ -668,6 +683,37 @@ model Booking {
   @@index([roomId])
   @@index([checkInDate, checkOutDate])
   @@index([status])
+  @@index([commissionStatementId])
+}
+
+model CommissionStatement {
+  id String @id @default(cuid())
+
+  hostProfileId String
+  hostProfile   HostProfile @relation(fields: [hostProfileId], references: [id], onDelete: Restrict)
+
+  // Billing month (first day of the month). Covers every completed,
+  // not-yet-billed stay that checked out before the end of this month.
+  periodStart DateTime @db.Date
+  currency    Currency
+
+  bookingCount     Int
+  bookingsTotal    Decimal @db.Decimal(12, 2) // what guests paid the host
+  commissionAmount Decimal @db.Decimal(12, 2) // what the host owes the platform
+
+  status         CommissionStatementStatus @default(DUE)
+  dueDate        DateTime                  @db.Date
+  paidAt         DateTime?
+  markedPaidById String?
+  paymentNote    String? // e.g. bank transfer reference
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@unique([hostProfileId, periodStart, currency])
+  @@index([status, dueDate])
 }
 
 // Assigns a specific physical RoomInventoryUnit to a Booking for its date

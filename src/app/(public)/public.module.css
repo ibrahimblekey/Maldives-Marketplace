@@ -136,3 +136,12 @@
   .navLink, .navButton { padding: 7px 10px; }
   .brand { font-size: 0.9375rem; }
 }
+
+/* Booking */
+.bookForm { display: flex; flex-direction: column; gap: 12px; }
+.bookRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bookTotal { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-top: 1px solid #e5eaec; padding-top: 12px; }
+.bookTotal strong { font-size: 1.375rem; }
+.reserveButton { display: inline-block; margin-top: 8px; background: #f28c28; color: white; font-weight: 700; padding: 8px 16px; border-radius: 8px; font-size: 0.9375rem; }
+.reserveButton:hover { background: #d97614; }
+.searchButton:disabled { opacity: 0.6; cursor: not-allowed; }

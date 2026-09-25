@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { safeCallbackUrl } from "@/lib/safe-redirect";
 import styles from "../auth-forms.module.css";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  // Where to continue after signing up, e.g. back to a booking in progress.
+  const callbackUrl = safeCallbackUrl(useSearchParams().get("callbackUrl"));
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -48,11 +51,11 @@ export default function RegisterPage() {
       if (signInResult?.error) {
         // Account was created but auto sign-in failed for some reason —
         // send them to log in manually rather than showing a false error.
-        router.push("/login");
+        router.push(callbackUrl === "/dashboard" ? "/login" : `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
         return;
       }
 
-      router.push("/dashboard");
+      router.push(callbackUrl);
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
@@ -116,9 +119,17 @@ export default function RegisterPage() {
         </button>
 
         <p className={styles.footerText}>
-          Already have an account? <Link href="/login">Sign in</Link>
+          Already have an account? <Link href={callbackUrl === "/dashboard" ? "/login" : `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}>Sign in</Link>
         </p>
       </form>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
   );
 }

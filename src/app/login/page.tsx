@@ -4,12 +4,13 @@ import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { safeCallbackUrl } from "@/lib/safe-redirect";
 import styles from "../auth-forms.module.css";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -87,7 +88,7 @@ function LoginForm() {
         </button>
 
         <p className={styles.footerText}>
-          Don&apos;t have an account? <Link href="/register">Create one</Link>
+          Don&apos;t have an account? <Link href={callbackUrl === "/dashboard" ? "/register" : `/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}>Create one</Link>
         </p>
       </form>
     </div>

@@ -2,9 +2,56 @@
 
 Milestones built so far: project setup, database schema, authentication,
 admin management of the Country → Atoll → Island location hierarchy, host
-property listings with admin review, and public search + property pages.
-No booking or payments yet — see
-[Project architecture](#project-architecture) for what's next.
+property listings with admin review, public search + property pages, and
+bookings (pay at the property) with monthly commission billing. No online
+payments yet — see [Project architecture](#project-architecture).
+
+## Bookings & commission
+
+**Model:** instant booking, guest pays the property on arrival, the
+platform keeps **10%** commission (`COMMISSION_PERCENT` in
+`src/server/services/booking-service.ts`), billed to hosts monthly.
+
+- **Traveler:** property page (with dates) → **Reserve** on a room → sign in
+  or sign up (they're brought back to the booking) → choose number of rooms,
+  guests, name, phone, special requests → **Confirm booking**. They get a
+  reference like `MV-2026-000042` and see it under **My trips**, where they
+  can cancel before check-in. Only TRAVELER accounts can book; hosts can't
+  book their own property.
+- **Every booking stores a price snapshot** (total, commission, host's
+  share) fixed at booking time. If the price changed after the traveler
+  loaded the page, the booking is refused and they're shown the new price.
+- **No double booking:** a booking claims specific physical rooms. Bookings
+  of one room type are serialised with a row lock, and the database's
+  EXCLUDE constraint refuses any overlapping claim regardless (tested with
+  two travelers confirming the last room at the same moment).
+- **Host:** **Bookings** (upcoming / past / cancelled) with the guest's
+  contact details; can cancel an upcoming booking (with a reason the guest
+  sees); after check-in day marks **Guest stayed** or **No-show**. Stays not
+  marked within **7 days of check-out** count as stayed. **Availability** tab
+  on each property: 4-week "rooms free per night" view, and blocking rooms
+  for dates (maintenance, bookings taken elsewhere).
+- **Commission statements:** at the start of each month an admin opens
+  **Admin → Commission statements**, picks the month that just ended and
+  clicks **Create statements**. Each host gets one statement per currency
+  for their completed, not-yet-billed stays (cancelled and no-show bookings
+  are never billed; a stay is never billed twice). Statements are due 14
+  days later. Hosts see them under **Commission statements** with payment
+  instructions. When the money arrives, the admin opens the statement and
+  clicks **Mark as paid**. **While a statement is overdue, that host's
+  listings are hidden from search and can't be booked.**
+- **Payment instructions** shown to hosts come from the
+  `COMMISSION_PAYMENT_INSTRUCTIONS` environment variable (your bank
+  details); without it a generic "our team will contact you" text is shown.
+- Admins see every booking under **Admin → Bookings**. Statement creation
+  and payments are recorded in `AdminAuditLog`.
+- Login/sign-up only follow same-site "continue to" links
+  (`src/lib/safe-redirect.ts`), so a crafted link can't bounce a user to
+  another website after signing in.
+
+Not yet: emails/notifications, online payment (see the payments plan),
+late-cancellation fees (can't be collected while guests pay on arrival),
+extra-guest/extra-bed fees at booking time.
 
 ## Public search & property pages
 

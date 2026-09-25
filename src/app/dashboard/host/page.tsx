@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { prisma } from "@/lib/db";
+import { todayInMaldives } from "@/lib/stay-pricing";
 import { requireHost } from "@/server/auth/page-guards";
 import { getHostProfile } from "@/server/services/host-service";
 import { listHostProperties } from "@/server/services/property-service";
@@ -27,7 +29,14 @@ export default async function HostDashboardPage() {
     );
   }
 
-  const properties = await listHostProperties(session.user.id);
+  const today = todayInMaldives();
+  const [properties, upcomingCount, dueCount] = await Promise.all([
+    listHostProperties(session.user.id),
+    prisma.booking.count({
+      where: { property: { hostProfile: { userId: session.user.id } }, status: "CONFIRMED", checkOutDate: { gt: today } },
+    }),
+    prisma.commissionStatement.count({ where: { hostProfile: { userId: session.user.id }, status: "DUE" } }),
+  ]);
 
   return (
     <div>
@@ -38,6 +47,14 @@ export default async function HostDashboardPage() {
           Edit host details
         </Link>
       </p>
+      <div className={styles.buttonRow} style={{ marginBottom: 24 }}>
+        <Link className={styles.button} href="/dashboard/host/bookings">
+          Bookings{upcomingCount > 0 ? ` (${upcomingCount} upcoming)` : ""}
+        </Link>
+        <Link className={styles.buttonSecondary} href="/dashboard/host/statements">
+          Commission statements{dueCount > 0 ? ` (${dueCount} to pay)` : ""}
+        </Link>
+      </div>
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>

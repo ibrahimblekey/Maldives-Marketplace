@@ -1,39 +1,64 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { requireRole, ForbiddenError, UnauthenticatedError } from "@/server/auth/authorize";
-import styles from "../dashboard.module.css";
+import { requireRoleOrRedirect } from "@/server/auth/page-guards";
+import { listGuestBookings } from "@/server/services/booking-service";
+import { todayInMaldives } from "@/lib/stay-pricing";
+import { BookingStatusBadge } from "../_components/booking-details";
+import { formatDate, formatMoney } from "../_components/format";
+import styles from "../ui.module.css";
 
-/**
- * Protected traveler route. This page is the real authorization check for
- * this route — proxy.ts only handles the "not logged in at all" case.
- * A HOST or ADMIN hitting this URL directly is redirected away here, not
- * just hidden from a nav menu.
- */
+/** Traveler home: "My trips". Only the TRAVELER role may reach this page. */
 export default async function TravelerDashboardPage() {
-  let session;
-  try {
-    session = await requireRole(["TRAVELER"]);
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) {
-      redirect("/login?callbackUrl=/dashboard/traveler");
-    }
-    if (err instanceof ForbiddenError) {
-      redirect("/dashboard");
-    }
-    throw err;
-  }
+  const session = await requireRoleOrRedirect(["TRAVELER"], "/dashboard/traveler");
+  const bookings = await listGuestBookings(session.user.id);
+  const today = todayInMaldives();
+  const upcoming = bookings.filter((b) => b.status === "CONFIRMED" && b.checkOutDate > today).reverse();
+  const past = bookings.filter((b) => !upcoming.includes(b));
+
+  const list = (items: typeof bookings, empty: string) =>
+    items.length === 0 ? (
+      <p className={styles.empty}>{empty}</p>
+    ) : (
+      <div className={styles.cardList}>
+        {items.map((b) => (
+          <Link key={b.id} href={`/dashboard/traveler/trips/${b.id}`} className={styles.propertyCard}>
+            {b.property.images[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element -- host photos from Blob storage
+              <img className={styles.thumb} src={b.property.images[0].url} alt="" />
+            ) : (
+              <span className={styles.thumb} />
+            )}
+            <span className={styles.propertyCardBody}>
+              <span className={styles.propertyCardTitle}>{b.property.name}</span>
+              <span className={styles.muted} style={{ display: "block", fontSize: "0.875rem", marginBottom: 6 }}>
+                {formatDate(b.checkInDate)} → {formatDate(b.checkOutDate)} · {b.numRooms} × {b.room.name} ·{" "}
+                {formatMoney(b.totalAmount, b.currency)} · {b.bookingReference}
+              </span>
+              <BookingStatusBadge status={b.status} />
+            </span>
+          </Link>
+        ))}
+      </div>
+    );
 
   return (
-    <div className={styles.card}>
-      <h1>Traveler dashboard</h1>
-      <p>Welcome, {session.user.name}.</p>
-      <p>
-        This is a placeholder for booking history, favorites, and profile
-        management — built in a later milestone. What matters here is that
-        only accounts with the TRAVELER role can reach this page.
+    <div>
+      <h1 className={styles.pageTitle}>My trips</h1>
+      <p className={styles.pageHint}>
+        Welcome, {session.user.name}.{" "}
+        <Link className={styles.link} href="/search">
+          Find a stay →
+        </Link>
       </p>
-      <p style={{ marginTop: 16 }}>
-        <Link href="/dashboard/become-host" style={{ color: "#0e7c86", fontWeight: 600 }}>
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Upcoming ({upcoming.length})</h2>
+        {list(upcoming, "No upcoming trips yet.")}
+      </section>
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Past &amp; cancelled ({past.length})</h2>
+        {list(past, "Nothing here yet.")}
+      </section>
+      <p style={{ marginTop: 8 }}>
+        <Link href="/dashboard/become-host" className={styles.link}>
           Own a guesthouse, hotel or villa? Become a host →
         </Link>
       </p>
