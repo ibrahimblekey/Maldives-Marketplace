@@ -19,7 +19,7 @@ import { assertNotRateLimited, getClientIp, recordLoginAttempt } from "@/server/
  * onto every request — this is the piece that makes role-based route
  * protection possible without a database lookup on every page load.
  */
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -78,12 +78,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       // `user` is only defined right after sign-in; persist what we need
       // onto the token so subsequent requests don't hit the database.
       if (user) {
         token.id = user.id as string;
         token.role = (user as { role: string }).role;
+      }
+      // A session update (e.g. right after a traveler becomes a host, see
+      // src/app/dashboard/become-host/actions.ts) re-reads the role from the
+      // database. The update's own payload is deliberately ignored: a client
+      // can trigger an update too, so the role must only ever come from here.
+      if (trigger === "update" && token.id) {
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { role: true, isActive: true },
+        });
+        if (fresh?.isActive) {
+          token.role = fresh.role;
+        }
       }
       return token;
     },

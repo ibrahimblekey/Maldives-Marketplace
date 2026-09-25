@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireRole, ForbiddenError, UnauthenticatedError } from "@/server/auth/authorize";
 import styles from "../dashboard.module.css";
@@ -30,6 +31,11 @@ export default async function TravelerDashboardPage() {
         This is a placeholder for booking history, favorites, and profile
         management — built in a later milestone. What matters here is that
         only accounts with the TRAVELER role can reach this page.
+      </p>
+      <p style={{ marginTop: 16 }}>
+        <Link href="/dashboard/become-host" style={{ color: "#0e7c86", fontWeight: 600 }}>
+          Own a guesthouse, hotel or villa? Become a host →
+        </Link>
       </p>
     </div>
   );

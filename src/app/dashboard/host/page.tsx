@@ -1,32 +1,79 @@
-import { redirect } from "next/navigation";
-import { requireRole, ForbiddenError, UnauthenticatedError } from "@/server/auth/authorize";
-import styles from "../dashboard.module.css";
+import Link from "next/link";
+import { requireHost } from "@/server/auth/page-guards";
+import { getHostProfile } from "@/server/services/host-service";
+import { listHostProperties } from "@/server/services/property-service";
+import { ActionForm } from "../_components/action-form";
+import { HostProfileFields } from "../_components/host-profile-fields";
+import { StatusBadge } from "../_components/status-badge";
+import { saveHostProfileAction } from "./actions";
+import styles from "../ui.module.css";
 
-/** Protected host route — only the HOST role may reach this page. */
+/** Host home: host details + "My properties". Only the HOST role may reach this page. */
 export default async function HostDashboardPage() {
-  let session;
-  try {
-    session = await requireRole(["HOST"]);
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) {
-      redirect("/login?callbackUrl=/dashboard/host");
-    }
-    if (err instanceof ForbiddenError) {
-      redirect("/dashboard");
-    }
-    throw err;
+  const session = await requireHost();
+  const profile = await getHostProfile(session.user.id);
+
+  if (!profile) {
+    return (
+      <div>
+        <h1 className={styles.pageTitle}>Welcome, {session.user.name}</h1>
+        <p className={styles.pageHint}>Before listing a property, tell us a little about you.</p>
+        <section className={styles.section}>
+          <ActionForm action={saveHostProfileAction} submitLabel="Save and continue">
+            <HostProfileFields />
+          </ActionForm>
+        </section>
+      </div>
+    );
   }
 
+  const properties = await listHostProperties(session.user.id);
+
   return (
-    <div className={styles.card}>
-      <h1>Host dashboard</h1>
-      <p>Welcome, {session.user.name}.</p>
-      <p>
-        This is a placeholder for property and room management — built in a
-        later milestone, after host onboarding/verification exists. What
-        matters here is that only accounts with the HOST role can reach this
-        page.
+    <div>
+      <h1 className={styles.pageTitle}>Host dashboard</h1>
+      <p className={styles.pageHint}>
+        {profile.businessName} · {profile.contactPhone} ·{" "}
+        <Link className={styles.link} href="/dashboard/host/profile">
+          Edit host details
+        </Link>
       </p>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>My properties ({properties.length})</h2>
+          <Link className={styles.button} href="/dashboard/host/properties/new">
+            + List a new property
+          </Link>
+        </div>
+        {properties.length === 0 ? (
+          <p className={styles.empty}>
+            You haven&rsquo;t listed a property yet. Click &ldquo;List a new property&rdquo; to start. You can save
+            and come back any time before submitting it for review.
+          </p>
+        ) : (
+          <div className={styles.cardList}>
+            {properties.map((p) => (
+              <Link key={p.id} href={`/dashboard/host/properties/${p.id}`} className={styles.propertyCard}>
+                {p.images[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- plain <img>: host-uploaded photos, no optimisation needed in the dashboard
+                  <img className={styles.thumb} src={p.images[0].url} alt="" />
+                ) : (
+                  <span className={styles.thumb} />
+                )}
+                <span className={styles.propertyCardBody}>
+                  <span className={styles.propertyCardTitle}>{p.name}</span>
+                  <span className={styles.muted} style={{ display: "block", fontSize: "0.875rem", marginBottom: 6 }}>
+                    {p.propertyType.name} · {p.island.name}, {p.island.atoll.name} · {p._count.rooms} room type
+                    {p._count.rooms === 1 ? "" : "s"}
+                  </span>
+                  <StatusBadge status={p.status} hasPendingChanges={p.changesSubmittedAt !== null} />
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

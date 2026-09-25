@@ -1,9 +1,77 @@
 # Maldives Travel Marketplace
 
-Milestones built so far: project setup, database schema, authentication, and
-admin management of the Country → Atoll → Island location hierarchy. No
-search, property listings, or booking features yet — see
+Milestones built so far: project setup, database schema, authentication,
+admin management of the Country → Atoll → Island location hierarchy, and
+host property listings with admin review. No public search, property
+pages, or booking features yet — see
 [Project architecture](#project-architecture) for what's next.
+
+## Host property listings
+
+**Becoming a host.** Every account registers as a TRAVELER. A traveler
+becomes a HOST from **Dashboard → Become a host**
+(`/dashboard/become-host`) by entering host details (business name, phone,
+optional registration number). That creates their `HostProfile` and
+changes their role in one transaction, and refreshes their session so the
+new role applies immediately (`unstable_update` + the `jwt` callback in
+`src/lib/auth.ts`, which re-reads the role from the database and ignores
+anything the client sends). Admin accounts can't become hosts.
+
+**Listing wizard** (`/dashboard/host/properties/...`): 1 Basics → 2 Rooms &
+prices (room types, number of physical rooms, nightly price, seasonal
+prices) → 3 Amenities → 4 Policies → 5 Photos → 6 Review & submit.
+Everything saves as you go. Submitting needs at least one room type with
+at least one room, check-in/out times + policies, and **at least 5
+photos**.
+
+**Lifecycle:** `DRAFT → PENDING_APPROVAL → APPROVED` (or `REJECTED` with a
+reason → host fixes → resubmits). A host can withdraw a pending listing
+back to draft. Editing is locked while a listing is pending.
+
+**Editing a live (APPROVED) listing:**
+
+| Change | What happens |
+| --- | --- |
+| Prices, seasonal prices, room counts, room types, amenities, policies, distances | Saved immediately, no review |
+| Name, description, adding/removing photos | Held as a change request; travelers keep seeing the approved version until an admin approves it |
+| Photo order / cover photo | Immediate (only rearranges already-approved photos) |
+| Property type, island, address | Locked (contact support) |
+
+Pending text lives in `Property.pendingName` / `pendingDescription`;
+pending photos use `PropertyImage.status` (`PENDING_ADD` /
+`PENDING_REMOVE`). `changesSubmittedAt` is set while a change request is
+waiting. The host can cancel their own pending edits.
+
+**Admin review** (`/dashboard/admin/properties`): two queues (new listings,
+edits to live listings) plus a list of all listings. Approving/rejecting
+requires a reason for rejections, is recorded in `AdminAuditLog`, and is
+refused if the host changed the listing after the admin opened it (the page
+sends back the `submittedAt`/`changesSubmittedAt` version it showed).
+
+**Security:** every page, server action and the upload route re-checks the
+role on the server; every host operation loads the property through
+`hostProfile.userId`, so another host's property id is a plain 404. Business
+rules live in `src/server/services/property-service.ts` (host) and
+`property-review-service.ts` (admin).
+
+### Photo storage (Vercel Blob)
+
+Photos are resized in the browser (max 2000 px, re-encoded as JPEG, which
+also strips phone location data) and uploaded to
+`/api/host/properties/[id]/photos`. The server checks the file's actual
+bytes (only real JPEG/PNG/WebP, max 4 MB) before storing it.
+
+- **Production:** stored in a **public** Vercel Blob store. Connecting the
+  store to the Vercel project adds the `BLOB_READ_WRITE_TOKEN` environment
+  variable automatically. Without it, uploads fail with a clear message.
+- **Local development without a token:** files go to `public/dev-uploads/`
+  (git-ignored) so the flow can be tried end to end.
+
+### Default property types and amenities
+
+The `host_property_listing` migration inserts the same default property
+types and amenities as `prisma/seed.ts` (skipping any that already exist),
+so a fresh production database works without running the seed.
 
 ## Locations admin (Atolls & Islands)
 

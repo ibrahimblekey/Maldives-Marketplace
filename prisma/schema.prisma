@@ -62,6 +62,18 @@ enum PropertyStatus {
   SUSPENDED
 }
 
+// Review state of a single listing photo. Photos on a listing that has never
+// been approved are simply LIVE (the whole listing is reviewed at once).
+// Once a listing is APPROVED, a newly uploaded photo starts as PENDING_ADD
+// and a photo the host deletes becomes PENDING_REMOVE — both stay that way
+// (the traveler-facing listing keeps showing only LIVE + PENDING_REMOVE
+// photos) until an admin approves or rejects the change request.
+enum PropertyImageStatus {
+  LIVE
+  PENDING_ADD
+  PENDING_REMOVE
+}
+
 enum MealPlan {
   ROOM_ONLY
   BREAKFAST
@@ -365,6 +377,20 @@ model Property {
   approvedAt         DateTime?
   approvedByAdminId  String?
   rejectionReason    String?
+  submittedAt        DateTime? // when the host last submitted the listing for review
+
+  // --- Change requests on an already-APPROVED listing ---
+  // Name, description and photos are reviewed content: on an approved
+  // listing, edits to them are held here (and in PropertyImage.status)
+  // while the approved version stays live. Prices, room counts, amenities
+  // and policies are not reviewed and are written straight to their tables.
+  // changesSubmittedAt is non-null exactly while a change request is
+  // waiting for an admin; it is bumped on every new edit so an admin can
+  // never approve a version they didn't see.
+  pendingName            String?
+  pendingDescription     String?   @db.Text
+  changesSubmittedAt     DateTime?
+  changesRejectionReason String?
 
   distanceFromBeachMeters  Int?
   distanceFromHarborMeters Int?
@@ -391,6 +417,7 @@ model Property {
   @@index([islandId])
   @@index([status])
   @@index([hostProfileId])
+  @@index([changesSubmittedAt])
 }
 
 model PropertyImage {
@@ -401,7 +428,8 @@ model PropertyImage {
 
   url       String
   altText   String?
-  sortOrder Int     @default(0)
+  sortOrder Int     @default(0) // lowest sortOrder among live photos is the cover photo
+  status    PropertyImageStatus @default(LIVE)
 
   createdAt DateTime @default(now())
 
