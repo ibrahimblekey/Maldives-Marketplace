@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local photo uploads when no Vercel Blob token is set (development only)
+/public/dev-uploads/
