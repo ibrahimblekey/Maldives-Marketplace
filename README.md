@@ -489,3 +489,8 @@ Prisma's own dependency updates will resolve this without any action here.
 If this project ever adds a second, MySQL-backed data source, revisit this
 decision immediately, since the "unused code path" reasoning would no
 longer hold.
+
+## Development workflow
+
+Changes are prepared on a feature branch and merged into `main` via a pull
+request; Vercel deploys `main` to production automatically.
