@@ -1,10 +1,54 @@
 # Maldives Travel Marketplace
 
 Milestones built so far: project setup, database schema, authentication,
-admin management of the Country → Atoll → Island location hierarchy, and
-host property listings with admin review. No public search, property
-pages, or booking features yet — see
+admin management of the Country → Atoll → Island location hierarchy, host
+property listings with admin review, and public search + property pages.
+No booking or payments yet — see
 [Project architecture](#project-architecture) for what's next.
+
+## Public search & property pages
+
+Browsing needs no account.
+
+- **Home** (`/`): search box (where / check-in / check-out / guests),
+  "browse by atoll" and the newest stays. Signed-in users see it too, with a
+  "My dashboard" link (it no longer redirects them away).
+- **Search** (`/search`): filters for price per night, property type, meal
+  plan and amenities (every ticked amenity must be present); sort by newest
+  or price. Every search is a plain URL (e.g.
+  `/search?where=island:maafushi&checkIn=2026-12-20&checkOut=2026-12-27&guests=2`),
+  so results can be shared and bookmarked. Malformed URL values are ignored.
+- **Property page** (`/stays/[slug]`): photo gallery, description, rooms,
+  amenities and policies. With dates, each room type shows its total price
+  for the stay (seasonal prices applied night by night, with a breakdown),
+  how many rooms are left, or why it can't be booked (sold out / minimum or
+  maximum stay). The booking button is a placeholder until the booking
+  milestone.
+
+**What the public can see** is decided in one place,
+`src/server/services/listing-search-service.ts`: only APPROVED listings with
+at least one active room; only the approved name/description (never pending
+edits); only live photos (a photo pending removal still shows, a photo
+pending approval doesn't); no host contact details.
+
+**Availability for dates** = a room type's active physical rooms, minus
+rooms with an overlapping booking that isn't cancelled (the same rule as the
+database's no-double-booking constraint), minus rooms the host has blocked.
+A stay is check-in inclusive, check-out exclusive; a seasonal price covers
+its start and end dates. A listing matches a party of N guests if its
+bookable rooms can sleep N between them. Pricing rules live in
+`src/lib/stay-pricing.ts` (money summed in whole cents) so the booking flow
+can quote exactly what the traveler saw.
+
+**Prices across currencies:** there are no exchange rates yet, so the price
+filter and price sorting compare USD prices. When the price filter is on,
+listings priced in other currencies are hidden (the page says so); when
+sorting by price, they're listed last.
+
+Search does its filtering by location/type/amenities/meal plan in the
+database and computes prices/availability in memory. That's exact and fast
+for hundreds of listings; move the availability step into SQL if the
+catalogue grows into the thousands.
 
 ## Host property listings
 
