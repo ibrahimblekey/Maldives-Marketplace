@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyBookingCancelled } from "@/server/email/notifications";
 import { requireRoleOrRedirect } from "@/server/auth/page-guards";
 import { cancelAsGuest } from "@/server/services/booking-service";
 import { userMessageFor } from "@/server/services/errors";
@@ -14,6 +16,7 @@ export async function cancelTripAction(bookingId: string, _prev: ActionState, fo
   } catch (err) {
     return { error: userMessageFor(err, "cancel-trip") };
   }
+  after(() => notifyBookingCancelled(bookingId, "guest"));
   revalidatePath("/dashboard/traveler", "layout");
   return { error: null, message: "Your booking has been cancelled." };
 }

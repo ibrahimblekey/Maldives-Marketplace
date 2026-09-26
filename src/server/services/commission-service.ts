@@ -81,7 +81,7 @@ export async function generateStatements(adminUserId: string, periodStart: Date)
       groups.set(key, [...(groups.get(key) ?? []), b]);
     }
 
-    let created = 0;
+    const createdIds: string[] = [];
     let skipped = 0;
     for (const [key, items] of groups) {
       const [hostProfileId, currency] = key.split("|");
@@ -118,8 +118,9 @@ export async function generateStatements(adminUserId: string, periodStart: Date)
       if (claimed.count !== items.length) {
         throw new UserFacingError("Bookings changed while the bills were being generated. Please try again.");
       }
-      created += 1;
+      createdIds.push(statement.id);
     }
+    const created = createdIds.length;
 
     await tx.adminAuditLog.create({
       data: {
@@ -130,7 +131,7 @@ export async function generateStatements(adminUserId: string, periodStart: Date)
         metadata: { created, skipped, bookings: bookings.length },
       },
     });
-    return { created, skipped };
+    return { created, skipped, statementIds: createdIds };
   });
 }
 

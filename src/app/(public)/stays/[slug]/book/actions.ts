@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { notifyBookingCreated } from "@/server/email/notifications";
 import { z } from "zod";
 import { requireRoleOrRedirect } from "@/server/auth/page-guards";
 import { parseStay } from "@/lib/stay-pricing";
@@ -66,5 +68,6 @@ export async function createBookingAction(
   } catch (err) {
     return { error: userMessageFor(err, "create-booking") };
   }
+  after(() => notifyBookingCreated(bookingId));
   redirect(`/dashboard/traveler/trips/${bookingId}?booked=1`);
 }

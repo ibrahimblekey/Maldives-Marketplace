@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyBookingCancelled } from "@/server/email/notifications";
 import { requireHost } from "@/server/auth/page-guards";
 import { cancelAsHost, markStayOutcome } from "@/server/services/booking-service";
 import { userMessageFor } from "@/server/services/errors";
@@ -17,6 +19,7 @@ export async function hostCancelBookingAction(bookingId: string, _prev: ActionSt
   } catch (err) {
     return { error: userMessageFor(err, "host-cancel-booking") };
   }
+  after(() => notifyBookingCancelled(bookingId, "host"));
   revalidatePath("/dashboard/host/bookings", "layout");
   return { error: null, message: "Booking cancelled." };
 }
