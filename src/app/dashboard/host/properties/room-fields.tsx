@@ -46,6 +46,7 @@ export function RoomFields({
       <div className={styles.row}>
         <label className={styles.label}>
           Price per night
+          <span className={styles.help}>Your full price, including TGST, Green Tax and any service charge. Guests pay exactly this amount.</span>
           <input className={styles.input} name="basePrice" type="number" required min={0.01} step={0.01} inputMode="decimal" defaultValue={initial?.basePrice} placeholder="e.g. 85" />
         </label>
         <label className={styles.label}>

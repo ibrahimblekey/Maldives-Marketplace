@@ -72,7 +72,7 @@ function stayRows(b: LoadedBooking): [string, string][] {
     ["Check-in", `${d(b.checkInDate)}${b.property.checkInTime ? `, from ${b.property.checkInTime}` : ""}`],
     ["Check-out", `${d(b.checkOutDate)}${b.property.checkOutTime ? `, by ${b.property.checkOutTime}` : ""} (${nights} night${nights === 1 ? "" : "s"})`],
     ["Guests", `${b.numGuests} · lead guest ${b.guests[0]?.fullName ?? b.guest.name}`],
-    ["Total", `${money(b.totalAmount, b.currency)}, paid to the property on arrival`],
+    ["Total", `${money(b.totalAmount, b.currency)} including all taxes, paid to the property on arrival`],
   ];
 }
 

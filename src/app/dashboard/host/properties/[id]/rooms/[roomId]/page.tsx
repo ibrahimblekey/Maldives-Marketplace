@@ -135,6 +135,7 @@ export default async function EditRoomPage({ params }: { params: Promise<{ id: s
               <div className={styles.row}>
                 <label className={styles.label}>
                   Price per night ({room.currency})
+                  <span className={styles.help}>Including all taxes and charges, like the normal price.</span>
                   <input className={styles.input} name="pricePerNight" type="number" required min={0.01} step={0.01} inputMode="decimal" />
                 </label>
                 <label className={styles.label}>

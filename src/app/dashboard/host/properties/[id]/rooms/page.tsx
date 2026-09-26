@@ -20,7 +20,8 @@ export default async function RoomsStepPage({ params }: { params: Promise<{ id: 
         )}
       </div>
       <p className={styles.sectionHint}>
-        Add each kind of room you offer, how many of it you have, and its nightly price. Open a room type to add
+        Add each kind of room you offer, how many of it you have, and its nightly price. Enter prices that already include
+        TGST, Green Tax and any service charge: guests pay exactly the price shown. Open a room type to add
         seasonal prices (e.g. a higher price over New Year). Prices and room counts can be changed at any time, even
         after your listing is live.
       </p>

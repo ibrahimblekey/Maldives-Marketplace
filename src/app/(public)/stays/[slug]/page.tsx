@@ -31,7 +31,7 @@ function RoomPrice({ offer, nights, bookHref }: { offer: RoomOffer; nights?: num
     return (
       <div className={styles.roomPrice}>
         <strong>{formatCents(offer.nightlyCents, currency)}</strong>
-        <span className={styles.muted}>per night</span>
+        <span className={styles.muted}>per night, taxes included</span>
       </div>
     );
   }
@@ -53,7 +53,7 @@ function RoomPrice({ offer, nights, bookHref }: { offer: RoomOffer; nights?: num
   return (
     <div className={styles.roomPrice}>
       <strong>{formatCents(offer.quote.totalCents, currency)}</strong>
-      <span className={styles.muted}>for {plural(nights ?? 0, "night")}</span>
+      <span className={styles.muted}>for {plural(nights ?? 0, "night")}, taxes included</span>
       {offer.roomsLeft <= 3 && <div className={styles.scarcity}>Only {plural(offer.roomsLeft, "room")} left</div>}
       {bookHref && (
         <Link href={bookHref} className={styles.reserveButton}>

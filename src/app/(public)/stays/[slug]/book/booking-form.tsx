@@ -85,7 +85,13 @@ export function BookingForm({
       </label>
 
       <div className={styles.bookTotal}>
-        <span>Total to pay at the property</span>
+        <span>
+          Total to pay at the property
+          <br />
+          <span className={styles.muted} style={{ fontSize: "0.8125rem" }}>
+            Includes all taxes and charges
+          </span>
+        </span>
         <strong>{money(perRoomCents * rooms, currency)}</strong>
       </div>
 

@@ -18,3 +18,5 @@ New decisions are added below, newest last, each with its date:
 - **Commission rate (2026-09-25):** 10% for now. Still has to become admin-configurable (see "Commission" above).
 - **Email notifications (2026-09-26):** sent through Resend. Until a domain is verified in Resend, emails only reach the owner's own address.
 - **Business model (2026-09-26):** undecided between commission and subscription. Commission billing stays as built until the owner decides; the anti-scam work goes ahead meanwhile.
+- **Taxes (2026-09-27):** for now, hosts enter prices that already include TGST, Green Tax and any service charge, and guests pay exactly the price shown. The site says "taxes included" wherever a price is shown. Automatic tax calculation is postponed.
+- **Online payment (2026-09-27):** postponed. Guests keep paying at the property until a payment gateway (e.g. BML Connect) is arranged.

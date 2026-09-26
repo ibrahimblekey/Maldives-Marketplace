@@ -72,7 +72,7 @@ export function BookingDetails({ booking, audience }: { booking: BookingDetail; 
         </dd>
         <dt>Total</dt>
         <dd>
-          <strong>{formatMoney(booking.totalAmount, booking.currency)}</strong>, paid to the property on arrival
+          <strong>{formatMoney(booking.totalAmount, booking.currency)}</strong>, including all taxes, paid to the property on arrival
         </dd>
         {audience !== "guest" && (
           <>
