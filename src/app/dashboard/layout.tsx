@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
@@ -22,7 +23,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        <span className={styles.brand}>Maldives Marketplace</span>
+        <Link href="/" className={styles.brand}>
+          Maldives Marketplace
+        </Link>
         <div className={styles.headerRight}>
           <span className={styles.userInfo}>
             {session.user.name} · <span className={styles.roleBadge}>{session.user.role}</span>

@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-function RoomPrice({ offer, nights }: { offer: RoomOffer; nights?: number }) {
+function RoomPrice({ offer, nights, bookHref }: { offer: RoomOffer; nights?: number; bookHref?: string }) {
   const currency = offer.room.currency;
   if (!offer.quote) {
     return (
@@ -54,6 +54,11 @@ function RoomPrice({ offer, nights }: { offer: RoomOffer; nights?: number }) {
       <strong>{formatCents(offer.quote.totalCents, currency)}</strong>
       <span className={styles.muted}>for {plural(nights ?? 0, "night")}</span>
       {offer.roomsLeft <= 3 && <div className={styles.scarcity}>Only {plural(offer.roomsLeft, "room")} left</div>}
+      {bookHref && (
+        <Link href={bookHref} className={styles.reserveButton}>
+          Reserve
+        </Link>
+      )}
       {hasSeason && (
         <details className={styles.breakdown}>
           <summary>Price per night</summary>
@@ -166,7 +171,15 @@ export default async function StayPage({ params, searchParams }: Props) {
                     </p>
                   )}
                 </div>
-                <RoomPrice offer={offer} nights={nights} />
+                <RoomPrice
+                  offer={offer}
+                  nights={nights}
+                  bookHref={
+                    stay
+                      ? `/stays/${property.slug}/book?room=${offer.room.id}&checkIn=${toIsoDate(stay.checkIn)}&checkOut=${toIsoDate(stay.checkOut)}&guests=${guests}`
+                      : undefined
+                  }
+                />
               </div>
             ))}
           </section>
@@ -250,7 +263,9 @@ export default async function StayPage({ params, searchParams }: Props) {
             </button>
           </form>
           <p className={styles.soon} style={{ marginTop: 14 }}>
-            Online booking is coming soon.
+            {stay && bookableOffers.length > 0
+              ? "Choose a room and click Reserve. Nothing is charged now: you pay the property when you arrive."
+              : "Add your dates to book. Nothing is charged online: you pay the property when you arrive."}
           </p>
         </aside>
       </div>

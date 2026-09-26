@@ -144,3 +144,13 @@
   .summaryGrid, .diff { grid-template-columns: 1fr; }
   .summaryGrid dt { margin-top: 8px; }
 }
+
+/* Availability calendar */
+.calendar { border-collapse: separate; border-spacing: 3px; font-size: 0.8125rem; }
+.calendar th { font-weight: 600; color: #7a8a90; padding: 4px 2px; min-width: 30px; text-align: center; white-space: nowrap; }
+.calendar th:first-child { text-align: left; }
+.calendar td { text-align: center; border-radius: 6px; padding: 6px 2px; font-weight: 600; }
+.calendarRoom { text-align: left !important; font-weight: 600; min-width: 140px; color: #0f2a35; }
+.calendarFree { background: #dff3e6; color: #1e6b3a; }
+.calendarPartial { background: #fff1d6; color: #8a5a00; }
+.calendarFull { background: #e5eaec; color: #7a8a90; }

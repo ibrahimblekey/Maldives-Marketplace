@@ -11,6 +11,7 @@ const STEPS = [
   { slug: "policies", label: "4. Policies" },
   { slug: "photos", label: "5. Photos" },
   { slug: "review", label: "6. Review & submit" },
+  { slug: "availability", label: "Availability" },
 ];
 
 export function StepNav({ propertyId, isLive }: { propertyId: string; isLive: boolean }) {

@@ -1,14 +1,16 @@
 import { Prisma, type MealPlan } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { quoteStay, toCents, type Stay, type StayQuote } from "@/lib/stay-pricing";
+import { hostInGoodStanding } from "./booking-service";
 
 /**
  * Public (traveler-facing) reads of property listings: search results and
  * property pages. Nothing here needs a signed-in user.
  *
  * What the public may see — enforced here, in one place:
- * - Only APPROVED properties. Drafts, pending, rejected and suspended
- *   listings don't exist as far as travelers are concerned.
+ * - Only APPROVED properties whose host has no overdue commission bill.
+ *   Drafts, pending, rejected and suspended listings don't exist as far as
+ *   travelers are concerned.
  * - Only the approved version of reviewed content: `name`/`description`
  *   (never `pendingName`/`pendingDescription`) and photos that are LIVE or
  *   PENDING_REMOVE (still live until an admin approves the removal) — never
@@ -29,11 +31,17 @@ import { quoteStay, toCents, type Stay, type StayQuote } from "@/lib/stay-pricin
 export const PAGE_SIZE = 12;
 const PUBLIC_PHOTO = { status: { in: ["LIVE", "PENDING_REMOVE"] } } satisfies Prisma.PropertyImageWhereInput;
 
-/** A listing can appear in search: approved, with at least one bookable room. */
-const SEARCHABLE = {
-  status: "APPROVED",
-  rooms: { some: { isActive: true, inventoryUnits: { some: { isActive: true } } } },
-} satisfies Prisma.PropertyWhereInput;
+/**
+ * A listing can appear in search: approved, with at least one bookable
+ * room, and its host has no overdue commission bill.
+ */
+function searchable(): Prisma.PropertyWhereInput {
+  return {
+    status: "APPROVED",
+    rooms: { some: { isActive: true, inventoryUnits: { some: { isActive: true } } } },
+    hostProfile: hostInGoodStanding(),
+  };
+}
 
 export type SearchSort = "recommended" | "price_asc" | "price_desc";
 
@@ -150,7 +158,7 @@ export type SearchResult = {
 
 export async function searchListings(criteria: SearchCriteria) {
   const where: Prisma.PropertyWhereInput = {
-    ...SEARCHABLE,
+    ...searchable(),
     AND: [
       ...(criteria.islandSlug ? [{ island: { slug: criteria.islandSlug } }] : []),
       ...(criteria.atollSlug ? [{ island: { atoll: { slug: criteria.atollSlug } } }] : []),
@@ -240,7 +248,7 @@ export async function searchListings(criteria: SearchCriteria) {
 
 export async function getPublicListing(slug: string, stay: Stay | null) {
   const property = await prisma.property.findFirst({
-    where: { slug, status: "APPROVED" },
+    where: { slug, status: "APPROVED", hostProfile: hostInGoodStanding() },
     // Explicit select, so pending edits and host contact details can't leak
     // into the page by accident.
     select: {
@@ -284,7 +292,7 @@ export async function getSearchOptions() {
           select: {
             slug: true,
             name: true,
-            _count: { select: { properties: { where: SEARCHABLE } } },
+            _count: { select: { properties: { where: searchable() } } },
           },
         },
       },
