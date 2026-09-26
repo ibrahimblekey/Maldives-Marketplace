@@ -1,3 +1,4 @@
+import { getPlatformSettings } from "@/server/services/settings-service";
 import { ActionForm } from "../../../../_components/action-form";
 import { savePoliciesAction } from "../../actions";
 import { loadHostProperty } from "../load";
@@ -5,8 +6,10 @@ import styles from "../../../../ui.module.css";
 
 export default async function PoliciesStepPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { property, editable, isLive } = await loadHostProperty(id);
+  const [{ property, editable, isLive }, settings] = await Promise.all([loadHostProperty(id), getPlatformSettings()]);
   const policy = property.cancellationPolicy;
+  const isTourist = property.listingType === "TOURIST_PROPERTY";
+  const pct = (v: { toString(): string }) => `${Number(v.toString())}%`;
 
   return (
     <section className={styles.section}>
@@ -29,6 +32,43 @@ export default async function PoliciesStepPage({ params }: { params: Promise<{ i
               <input className={styles.input} name="checkOutTime" type="time" required defaultValue={property.checkOutTime ?? "12:00"} />
             </label>
           </div>
+
+          <h3 className={styles.subTitle}>Taxes &amp; charges</h3>
+          {isTourist ? (
+            <>
+              <p className={styles.help}>
+                Guests pay your room price + service charge + T-GST {pct(settings.tgstPercent)} (on room + service charge).
+                Visitors also pay green tax per person per night; Maldivians, residents and children under 2 don&rsquo;t.
+                Guests see the full breakdown before booking.
+              </p>
+              <div className={styles.row}>
+                <label className={styles.label}>
+                  Service charge (%)
+                  <span className={styles.help}>Leave empty to use the standard {pct(settings.defaultServiceChargePercent)}. Enter 0 if you don&rsquo;t charge one.</span>
+                  <input
+                    className={styles.input}
+                    name="serviceChargePercent"
+                    inputMode="decimal"
+                    pattern="\d{1,2}(\.\d{1,2})?"
+                    placeholder={String(Number(settings.defaultServiceChargePercent.toString()))}
+                    defaultValue={property.serviceChargePercent?.toString() ? String(Number(property.serviceChargePercent.toString())) : ""}
+                  />
+                </label>
+                <label className={styles.label}>
+                  Green tax for your property
+                  <span className={styles.help}>Per visitor per night, as set by the government for your type of property.</span>
+                  <select className={styles.select} name="greenTaxTier" defaultValue={property.greenTaxTier}>
+                    <option value="STANDARD">USD {Number(settings.greenTaxStandardUsd.toString())} per visitor per night</option>
+                    <option value="HIGHER">USD {Number(settings.greenTaxHigherUsd.toString())} per visitor per night</option>
+                  </select>
+                </label>
+              </div>
+            </>
+          ) : (
+            <p className={styles.help}>
+              Private rental (Maldivians &amp; residents only): no service charge, T-GST or green tax. Your price is final.
+            </p>
+          )}
 
           <h3 className={styles.subTitle}>Cancellation</h3>
           <div className={styles.row}>

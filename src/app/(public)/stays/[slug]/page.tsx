@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MEAL_PLAN_LABELS } from "@/lib/validation/property";
-import { parseStay, toIsoDate, todayInMaldives } from "@/lib/stay-pricing";
+import { parseStay, toCents, toIsoDate, todayInMaldives, type TaxRates } from "@/lib/stay-pricing";
 import { getPublicListing, type RoomOffer } from "@/server/services/listing-search-service";
 import { formatCents, plural } from "../../_components/format";
 import { MAX_GUESTS, type RawSearchParams } from "../../_components/search-params";
@@ -25,13 +25,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-function RoomPrice({ offer, nights, bookHref }: { offer: RoomOffer; nights?: number; bookHref?: string }) {
+const pct = (p: string) => `${Number(p)}%`;
+
+function RoomPrice({ offer, nights, bookHref, rates }: { offer: RoomOffer; nights?: number; bookHref?: string; rates: TaxRates }) {
   const currency = offer.room.currency;
+  const isPrivate = rates.listingType === "PRIVATE_RENTAL";
+  if (offer.problem) {
+    return (
+      <div className={styles.roomPrice}>
+        <span className={styles.roomUnavailable}>{offer.problem}</span>
+      </div>
+    );
+  }
   if (!offer.quote) {
     return (
       <div className={styles.roomPrice}>
         <strong>{formatCents(offer.nightlyCents, currency)}</strong>
-        <span className={styles.muted}>per night</span>
+        <span className={styles.muted}>{isPrivate ? "per night, final price" : "per night + service charge & taxes"}</span>
       </div>
     );
   }
@@ -52,8 +62,13 @@ function RoomPrice({ offer, nights, bookHref }: { offer: RoomOffer; nights?: num
   const hasSeason = offer.quote.nights.some((n) => n.season);
   return (
     <div className={styles.roomPrice}>
-      <strong>{formatCents(offer.quote.totalCents, currency)}</strong>
+      <strong>{formatCents(offer.stayTotalBeforeGreenTaxCents ?? offer.quote.totalCents, currency)}</strong>
       <span className={styles.muted}>for {plural(nights ?? 0, "night")}</span>
+      <div className={styles.taxNote}>
+        {isPrivate
+          ? "final price, no taxes"
+          : `room ${formatCents(offer.quote.totalCents, currency)} + ${pct(rates.serviceChargePercent)} service charge + ${pct(rates.tgstPercent)} T-GST; green tax ${formatCents(toCents(rates.greenTaxPerNight), "USD")} per visitor per night extra`}
+      </div>
       {offer.roomsLeft <= 3 && <div className={styles.scarcity}>Only {plural(offer.roomsLeft, "room")} left</div>}
       {bookHref && (
         <Link href={bookHref} className={styles.reserveButton}>
@@ -62,7 +77,7 @@ function RoomPrice({ offer, nights, bookHref }: { offer: RoomOffer; nights?: num
       )}
       {hasSeason && (
         <details className={styles.breakdown}>
-          <summary>Price per night</summary>
+          <summary>Room price per night</summary>
           {offer.quote.nights.map((n) => (
             <div key={n.date.toISOString()}>
               {dayFormat.format(n.date)}: {formatCents(n.cents, currency)}
@@ -83,7 +98,8 @@ export default async function StayPage({ params, searchParams }: Props) {
 
   const listing = await getPublicListing(slug, stay);
   if (!listing) notFound();
-  const { property, offers, cheapest } = listing;
+  const { property, offers, cheapest, rates } = listing;
+  const isPrivate = rates.listingType === "PRIVATE_RENTAL";
 
   const photos = property.images;
   const policy = property.cancellationPolicy;
@@ -104,6 +120,11 @@ export default async function StayPage({ params, searchParams }: Props) {
         {property.propertyType.name} · {property.island.name}, {property.island.atoll.name} · Hosted by{" "}
         {property.hostProfile.businessName}
       </p>
+      {isPrivate && (
+        <p style={{ marginTop: 8 }}>
+          <span className={styles.localsBadge}>Private rental · Maldivians &amp; residents only</span>
+        </p>
+      )}
 
       {photos.length > 0 && (
         <div className={styles.gallery}>
@@ -173,6 +194,7 @@ export default async function StayPage({ params, searchParams }: Props) {
                   )}
                 </div>
                 <RoomPrice
+                  rates={rates}
                   offer={offer}
                   nights={nights}
                   bookHref={
@@ -221,6 +243,12 @@ export default async function StayPage({ params, searchParams }: Props) {
               <dd>{policy?.petsAllowed ? "Allowed" : "Not allowed"}</dd>
               <dt>Smoking</dt>
               <dd>{policy?.smokingAllowed ? "Allowed" : "Not allowed"}</dd>
+              <dt>Taxes &amp; charges</dt>
+              <dd>
+                {isPrivate
+                  ? "Private rental for Maldivians and residents: the price shown is final, with no service charge, T-GST or green tax."
+                  : `Room prices are before a ${pct(rates.serviceChargePercent)} service charge and ${pct(rates.tgstPercent)} T-GST (on room + service charge). Visitors also pay green tax of ${formatCents(toCents(rates.greenTaxPerNight), "USD")} per person per night (children under 2 and Maldivians/residents exempt). You'll see the full breakdown before booking.`}
+              </dd>
             </dl>
           </section>
         </div>
@@ -230,13 +258,25 @@ export default async function StayPage({ params, searchParams }: Props) {
             <p style={{ marginBottom: 14 }}>
               {stay && cheapest.quote ? (
                 <>
-                  <span className={styles.bookingPrice}>{formatCents(cheapest.quote.totalCents, cheapest.room.currency)}</span>{" "}
+                  <span className={styles.bookingPrice}>
+                    {formatCents(cheapest.stayTotalBeforeGreenTaxCents ?? cheapest.quote.totalCents, cheapest.room.currency)}
+                  </span>{" "}
                   <span className={styles.muted}>for {plural(nights!, "night")}, cheapest room</span>
+                  <br />
+                  <span className={styles.taxNote}>
+                    {isPrivate ? "final price" : "incl. service charge & T-GST; green tax for visitors extra"}
+                  </span>
                 </>
               ) : (
                 <>
                   from <span className={styles.bookingPrice}>{formatCents(cheapest.nightlyCents, cheapest.room.currency)}</span>{" "}
                   <span className={styles.muted}>/ night</span>
+                  {!isPrivate && (
+                    <>
+                      <br />
+                      <span className={styles.taxNote}>+ service charge &amp; taxes</span>
+                    </>
+                  )}
                 </>
               )}
             </p>

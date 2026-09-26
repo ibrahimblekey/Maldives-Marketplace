@@ -39,6 +39,7 @@ export default async function BasicsStepPage({ params }: { params: Promise<{ id:
               address: property.address,
               distanceFromBeachMeters: property.distanceFromBeachMeters,
               distanceFromHarborMeters: property.distanceFromHarborMeters,
+              listingType: property.listingType,
             }}
           />
         </fieldset>

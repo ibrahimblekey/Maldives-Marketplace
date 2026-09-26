@@ -38,9 +38,19 @@ export default async function EditRoomPage({ params }: { params: Promise<{ id: s
             />
           )}
         </div>
+        {room.needsPriceReview && (
+          <div className={styles.noticeWarn}>
+            <p>
+              <strong>Please check this price.</strong> Room prices are now entered <strong>before</strong> service charge and
+              taxes. The site adds them for guests. If {formatMoney(room.basePrice, room.currency)} already includes taxes, lower
+              it to the price before taxes, then click Save. Saving confirms the price.
+            </p>
+          </div>
+        )}
         <ActionForm action={updateRoomAction.bind(null, property.id, room.id)} submitLabel="Save room type" disabled={!editable}>
           <fieldset className={styles.fieldset} disabled={!editable}>
             <RoomFields
+              listingType={property.listingType}
               amenities={amenities}
               initial={{
                 name: room.name,
@@ -135,6 +145,7 @@ export default async function EditRoomPage({ params }: { params: Promise<{ id: s
               <div className={styles.row}>
                 <label className={styles.label}>
                   Price per night ({room.currency})
+                  <span className={styles.help}>Before service charge and taxes, like the normal price.</span>
                   <input className={styles.input} name="pricePerNight" type="number" required min={0.01} step={0.01} inputMode="decimal" />
                 </label>
                 <label className={styles.label}>

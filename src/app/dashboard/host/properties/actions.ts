@@ -53,6 +53,7 @@ function basicsFrom(formData: FormData) {
     description: text(formData, "description") ?? "",
     propertyTypeId: text(formData, "propertyTypeId") ?? "",
     islandId: text(formData, "islandId") ?? "",
+    listingType: text(formData, "listingType") ?? "",
     address: text(formData, "address"),
     distanceFromBeachMeters: text(formData, "distanceFromBeachMeters"),
     distanceFromHarborMeters: text(formData, "distanceFromHarborMeters"),
@@ -255,6 +256,8 @@ export async function savePoliciesAction(
     extraBedPolicy: text(formData, "extraBedPolicy"),
     petsAllowed: formData.get("petsAllowed") === "on",
     smokingAllowed: formData.get("smokingAllowed") === "on",
+    serviceChargePercent: text(formData, "serviceChargePercent"),
+    greenTaxTier: text(formData, "greenTaxTier") || undefined,
   });
   if (!parsed.success) return firstIssue(parsed.error);
 

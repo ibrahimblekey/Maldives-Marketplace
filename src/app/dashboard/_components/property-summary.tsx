@@ -1,4 +1,4 @@
-import { MEAL_PLAN_LABELS } from "@/lib/validation/property";
+import { LISTING_TYPE_LABELS, MEAL_PLAN_LABELS } from "@/lib/validation/property";
 import type { PropertyDetail } from "@/server/services/property-service";
 import { formatDate, formatDistance, formatMoney } from "./format";
 import styles from "../ui.module.css";
@@ -23,6 +23,12 @@ export function PropertySummary({ property }: { property: PropertyDetail }) {
           <dd>{property.name}</dd>
           <dt>Type</dt>
           <dd>{property.propertyType.name}</dd>
+          <dt>Listing type</dt>
+          <dd>
+            {LISTING_TYPE_LABELS[property.listingType]}
+            {property.listingType === "TOURIST_PROPERTY" &&
+              ` · service charge ${property.serviceChargePercent ? `${Number(property.serviceChargePercent.toString())}%` : "standard"} · ${property.greenTaxTier === "HIGHER" ? "higher" : "standard"} green tax`}
+          </dd>
           <dt>Location</dt>
           <dd>
             {property.island.name}, {property.island.atoll.name}

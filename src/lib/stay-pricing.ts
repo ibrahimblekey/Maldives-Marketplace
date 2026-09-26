@@ -119,3 +119,93 @@ export function quoteStay(room: PricedRoom, stay: Stay): StayQuote {
     stayRuleProblem,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Taxes & charges (docs/decisions.md → "Tax rules")
+//
+//   room          = nightly room prices × rooms
+//   service charge = room × property's service charge %
+//   T-GST         = (room + service charge) × T-GST %
+//   green tax     = visitors aged 2+ × nights × green tax per night (USD)
+//   total         = room + service charge + T-GST + green tax
+//
+// Maldivians/residents and visitors under 2 pay no green tax. Private
+// rentals (locals only) pay none of these: the host's price is final.
+// Percentages are handled in basis points and every amount is rounded to
+// the cent once, so the browser and the server always agree exactly.
+// ---------------------------------------------------------------------------
+
+export type ListingKind = "TOURIST_PROPERTY" | "PRIVATE_RENTAL";
+
+/** Rates in effect for one property (already resolved from platform settings). */
+export type TaxRates = {
+  listingType: ListingKind;
+  serviceChargePercent: string; // e.g. "10" or "10.00"
+  tgstPercent: string; // e.g. "17.00"
+  greenTaxPerNight: string; // USD, e.g. "6.00"
+};
+
+export type GuestMix = {
+  guests: number;
+  localGuests: number; // Maldivian citizens or residents
+  infantGuests: number; // visitors under 2
+};
+
+export type PriceBreakdown = {
+  roomCents: number;
+  serviceChargeCents: number;
+  tgstCents: number;
+  greenTaxCents: number;
+  greenTaxGuests: number;
+  totalCents: number;
+  rates: TaxRates;
+};
+
+function toBasisPoints(percent: string) {
+  return toCents(percent); // "17.5" -> 1750, same digit handling as money
+}
+
+function percentOf(cents: number, percent: string) {
+  return Math.round((cents * toBasisPoints(percent)) / 10_000);
+}
+
+/** Visitors aged 2 and over, who pay green tax. Never negative. */
+export function greenTaxPayingGuests(mix: GuestMix) {
+  return Math.max(0, mix.guests - mix.localGuests - mix.infantGuests);
+}
+
+/**
+ * Full price of a stay. `roomCentsPerRoom` is the room price for the whole
+ * stay for one room (from quoteStay), `numRooms` how many rooms.
+ */
+export function priceBreakdown(
+  roomCentsPerRoom: number,
+  numRooms: number,
+  nights: number,
+  rates: TaxRates,
+  mix: GuestMix
+): PriceBreakdown {
+  const roomCents = roomCentsPerRoom * numRooms;
+  if (rates.listingType === "PRIVATE_RENTAL") {
+    return { roomCents, serviceChargeCents: 0, tgstCents: 0, greenTaxCents: 0, greenTaxGuests: 0, totalCents: roomCents, rates };
+  }
+  const serviceChargeCents = percentOf(roomCents, rates.serviceChargePercent);
+  const tgstCents = percentOf(roomCents + serviceChargeCents, rates.tgstPercent);
+  const greenTaxGuests = greenTaxPayingGuests(mix);
+  const greenTaxCents = greenTaxGuests * nights * toCents(rates.greenTaxPerNight);
+  return {
+    roomCents,
+    serviceChargeCents,
+    tgstCents,
+    greenTaxCents,
+    greenTaxGuests,
+    totalCents: roomCents + serviceChargeCents + tgstCents + greenTaxCents,
+    rates,
+  };
+}
+
+/** Room + service charge + T-GST, without green tax (which depends on who travels). Used in search and on property pages. */
+export function priceBeforeGreenTax(roomCents: number, rates: TaxRates) {
+  const b = priceBreakdown(roomCents, 1, 1, rates, { guests: 0, localGuests: 0, infantGuests: 0 });
+  return b.roomCents + b.serviceChargeCents + b.tgstCents;
+}

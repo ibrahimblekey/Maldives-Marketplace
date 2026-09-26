@@ -13,6 +13,10 @@ import type { ActionState } from "@/app/dashboard/_components/action-state";
 const bookingFormSchema = z.object({
   numRooms: z.coerce.number().int().min(1, "Choose how many rooms").max(10),
   numGuests: z.coerce.number().int().min(1, "Enter the number of guests").max(50),
+  localGuests: z.coerce.number().int().min(0).max(50).default(0),
+  infantGuests: z.coerce.number().int().min(0).max(50).default(0),
+  localsOnly: z.literal("on").optional(),
+  expectedTotalCents: z.coerce.number().int().min(0),
   guestName: z.string().trim().min(2, "Enter the lead guest's full name").max(120),
   contactPhone: z
     .string()
@@ -23,17 +27,17 @@ const bookingFormSchema = z.object({
 });
 
 /**
- * Creates a booking. Only TRAVELER accounts can book. The stay, room and
- * the per-room price the traveler was shown come from .bind() on the page;
- * they're re-validated here and the service recomputes the price itself,
- * refusing the booking if it no longer matches what was shown.
+ * Creates a booking. Only TRAVELER accounts can book. The stay and room
+ * come from .bind() on the page, the guest mix and the total the traveler
+ * saw (with taxes) from the form. Everything is re-validated here and the
+ * service recomputes the full price itself, refusing the booking if it
+ * doesn't match what was shown.
  */
 export async function createBookingAction(
   slug: string,
   roomId: string,
   checkIn: string,
   checkOut: string,
-  shownPerRoomCents: number,
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
@@ -44,6 +48,10 @@ export async function createBookingAction(
   const parsed = bookingFormSchema.safeParse({
     numRooms: formData.get("numRooms"),
     numGuests: formData.get("numGuests"),
+    localGuests: formData.get("localGuests") || 0,
+    infantGuests: formData.get("infantGuests") || 0,
+    localsOnly: formData.get("localsOnly") ?? undefined,
+    expectedTotalCents: formData.get("expectedTotalCents"),
     guestName: formData.get("guestName"),
     contactPhone: formData.get("contactPhone"),
     specialRequests: formData.get("specialRequests") || undefined,
@@ -59,10 +67,13 @@ export async function createBookingAction(
       stay,
       numRooms: parsed.data.numRooms,
       numGuests: parsed.data.numGuests,
+      // On a locals-only private rental the guest confirms everyone is Maldivian or resident.
+      localGuests: parsed.data.localsOnly ? parsed.data.numGuests : parsed.data.localGuests,
+      infantGuests: parsed.data.infantGuests,
       guestName: parsed.data.guestName,
       contactPhone: parsed.data.contactPhone,
       specialRequests: parsed.data.specialRequests,
-      expectedTotalCents: shownPerRoomCents * parsed.data.numRooms,
+      expectedTotalCents: parsed.data.expectedTotalCents,
     });
     bookingId = booking.id;
   } catch (err) {

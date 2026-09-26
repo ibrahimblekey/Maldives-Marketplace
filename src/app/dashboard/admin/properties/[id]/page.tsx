@@ -8,7 +8,10 @@ import { ConfirmButton } from "../../../_components/confirm-button";
 import { formatDateTime } from "../../../_components/format";
 import { ChangeRequestSummary, PropertySummary } from "../../../_components/property-summary";
 import { StatusBadge } from "../../../_components/status-badge";
+import { LISTING_TYPE_LABELS } from "@/lib/validation/property";
+import { getPlatformSettings } from "@/server/services/settings-service";
 import {
+  savePropertyTaxAction,
   approveChangesAction,
   approveListingAction,
   rejectChangesAction,
@@ -38,6 +41,8 @@ export default async function AdminPropertyReviewPage({ params }: { params: Prom
   }
 
   const host = property.hostProfile;
+  const settings = await getPlatformSettings();
+  const n = (v: { toString(): string }) => String(Number(v.toString()));
   const pendingNew = property.status === "PENDING_APPROVAL" && property.submittedAt;
   const pendingChanges = property.status === "APPROVED" && property.changesSubmittedAt;
 
@@ -115,6 +120,44 @@ export default async function AdminPropertyReviewPage({ params }: { params: Prom
           </section>
         </>
       )}
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Taxes &amp; charges</h2>
+        <p className={styles.sectionHint}>
+          Check the listing type against the host&rsquo;s licence, and the green tax tier. Changes apply to new bookings.
+        </p>
+        <ActionForm action={savePropertyTaxAction.bind(null, property.id)} submitLabel="Save tax settings" variant="secondary">
+          <div className={styles.row}>
+            <label className={styles.label}>
+              Listing type
+              <select className={styles.select} name="listingType" defaultValue={property.listingType}>
+                {Object.entries(LISTING_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.label}>
+              Green tax tier
+              <select className={styles.select} name="greenTaxTier" defaultValue={property.greenTaxTier}>
+                <option value="STANDARD">USD {n(settings.greenTaxStandardUsd)} per visitor per night</option>
+                <option value="HIGHER">USD {n(settings.greenTaxHigherUsd)} per visitor per night</option>
+              </select>
+            </label>
+            <label className={styles.label}>
+              Service charge (%)
+              <input
+                className={styles.input}
+                name="serviceChargePercent"
+                inputMode="decimal"
+                placeholder={`default ${n(settings.defaultServiceChargePercent)}`}
+                defaultValue={property.serviceChargePercent ? n(property.serviceChargePercent) : ""}
+              />
+            </label>
+          </div>
+        </ActionForm>
+      </section>
 
       {property.status === "REJECTED" && property.rejectionReason && (
         <div className={styles.noticeError}>
