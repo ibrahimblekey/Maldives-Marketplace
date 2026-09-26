@@ -3,9 +3,36 @@
 Milestones built so far: project setup, database schema, authentication,
 admin management of the Country → Atoll → Island location hierarchy, host
 property listings with admin review, public search + property pages,
-bookings (pay at the property) with monthly commission billing, and email
-notifications. No online payments yet — see
+bookings (pay at the property) with monthly commission billing, email
+notifications, and anti-scam tools. No online payments yet — see
 [Project architecture](#project-architecture).
+
+## Anti-scam tools
+
+Per `docs/decisions.md` → "Anti-scam". Logic in
+`src/server/services/moderation-service.ts`.
+
+- **Deposit warning** on property pages, the booking page, the trip page and
+  the booking confirmation email: guests pay only at the property and must
+  never send a deposit or transfer beforehand.
+- **Report this listing** (`/stays/[slug]/report`), open to everyone, signed
+  in or not. Reasons include "asked me to pay outside this website". Limits:
+  one report per person per listing per day, 5 per connection per hour, 20
+  per day. Only a keyed hash of the IP is stored, never the IP itself.
+  Every admin is emailed; payment-request and scam reports are marked URGENT.
+- **Admin → Listing reports:** open reports first, with links to the host
+  and listing. Close each as "action taken" or "nothing wrong found", with a
+  note.
+- **Admin → Hosts:** search and filter (open reports, suspended). A host's
+  page shows their listings, reports, upcoming bookings and unpaid
+  statements, plus **Suspend host** (reason required, emailed to the host)
+  and **Unsuspend**.
+- **Suspension takes effect immediately:** all the host's listings leave
+  search and property pages and can't be booked (`hostInGoodStanding`), and
+  the host can't create or submit listings. Admins can't approve their
+  listings until they're unsuspended. Existing bookings are not cancelled
+  automatically; the admin sees them on the host's page.
+- Suspensions and report decisions are recorded in `AdminAuditLog`.
 
 ## Email notifications
 

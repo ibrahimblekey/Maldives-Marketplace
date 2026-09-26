@@ -14,3 +14,7 @@
 New decisions are added below, newest last, each with its date:
 - **Topic (YYYY-MM-DD):** the decision, in plain language.
 -->
+- **Booking confirmation (2026-09-25):** instant booking. A booking is confirmed immediately; hosts don't approve each request.
+- **Commission rate (2026-09-25):** 10% for now. Still has to become admin-configurable (see "Commission" above).
+- **Email notifications (2026-09-26):** sent through Resend. Until a domain is verified in Resend, emails only reach the owner's own address.
+- **Business model (2026-09-26):** undecided between commission and subscription. Commission billing stays as built until the owner decides; the anti-scam work goes ahead meanwhile.

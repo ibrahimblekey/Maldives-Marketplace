@@ -71,6 +71,10 @@ export async function approveListing(adminUserId: string, propertyId: string, re
     if (property.status !== "PENDING_APPROVAL" || !sameInstant(property.submittedAt, reviewedVersion)) {
       throw new StaleReviewError();
     }
+    const host = await tx.hostProfile.findUnique({ where: { id: property.hostProfileId }, select: { suspendedAt: true } });
+    if (host?.suspendedAt) {
+      throw new UserFacingError("This host is suspended. Unsuspend them on the Hosts page before approving their listing.");
+    }
     const now = new Date();
     const result = await tx.property.updateMany({
       where: { id: propertyId, status: "PENDING_APPROVAL", submittedAt: property.submittedAt },

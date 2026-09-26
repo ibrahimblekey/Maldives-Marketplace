@@ -51,7 +51,11 @@ export default async function AdminPropertyReviewPage({ params }: { params: Prom
         <StatusBadge status={property.status} hasPendingChanges={property.changesSubmittedAt !== null} />
       </div>
       <p className={styles.pageHint}>
-        Host: {host.businessName} ({host.user.name}, {host.user.email}, {host.contactPhone})
+        Host:{" "}
+        <Link className={styles.link} href={`/dashboard/admin/hosts/${property.hostProfileId}`}>
+          {host.businessName}
+        </Link>{" "}
+        ({host.user.name}, {host.user.email}, {host.contactPhone}){host.suspendedAt ? " · SUSPENDED" : ""}
         {property.approvedAt && ` · First approved ${formatDateTime(property.approvedAt)}`}
       </p>
 

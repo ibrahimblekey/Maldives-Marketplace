@@ -47,6 +47,16 @@ export default async function HostDashboardPage() {
           Edit host details
         </Link>
       </p>
+      {profile.suspendedAt && (
+        <div className={styles.noticeError}>
+          <p>
+            <strong>Your host account is suspended.</strong> Your listings are hidden from travelers and can&rsquo;t be booked,
+            and you can&rsquo;t submit new listings. Existing bookings stay in place.
+          </p>
+          {profile.suspensionReason && <p>Reason: &ldquo;{profile.suspensionReason}&rdquo;</p>}
+          <p>If you think this is a mistake, reply to the suspension email to contact our team.</p>
+        </div>
+      )}
       <div className={styles.buttonRow} style={{ marginBottom: 24 }}>
         <Link className={styles.button} href="/dashboard/host/bookings">
           Bookings{upcomingCount > 0 ? ` (${upcomingCount} upcoming)` : ""}

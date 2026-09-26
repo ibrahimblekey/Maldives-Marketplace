@@ -20,6 +20,7 @@ export default async function AdminDashboardPage() {
     throw err;
   }
 
+  const openReports = await prisma.listingReport.count({ where: { status: "OPEN" } });
   const overdueCount = await prisma.commissionStatement.count({
     where: { status: "DUE", dueDate: { lt: todayInMaldives() } },
   });
@@ -43,6 +44,16 @@ export default async function AdminDashboardPage() {
       <p>
         <Link href="/dashboard/admin/properties" style={{ color: "#0e7c86", fontWeight: 600 }}>
           Review property listings{pendingCount > 0 ? ` (${pendingCount} waiting)` : ""} →
+        </Link>
+      </p>
+      <p>
+        <Link href="/dashboard/admin/reports" style={{ color: openReports > 0 ? "#b3261e" : "#0e7c86", fontWeight: 600 }}>
+          Listing reports{openReports > 0 ? ` (${openReports} open)` : ""} →
+        </Link>
+      </p>
+      <p>
+        <Link href="/dashboard/admin/hosts" style={{ color: "#0e7c86", fontWeight: 600 }}>
+          Hosts →
         </Link>
       </p>
       <p>
