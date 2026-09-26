@@ -2,9 +2,49 @@
 
 Milestones built so far: project setup, database schema, authentication,
 admin management of the Country → Atoll → Island location hierarchy, host
-property listings with admin review, public search + property pages, and
-bookings (pay at the property) with monthly commission billing. No online
-payments yet — see [Project architecture](#project-architecture).
+property listings with admin review, public search + property pages,
+bookings (pay at the property) with monthly commission billing, and email
+notifications. No online payments yet — see
+[Project architecture](#project-architecture).
+
+## Email notifications
+
+Sent through [Resend](https://resend.com) (`src/server/email/`).
+
+| When | Who gets an email |
+| --- | --- |
+| Booking made | Guest (confirmation) and host (new booking, with guest contact) |
+| Booking cancelled by guest | Host, and the guest (confirmation) |
+| Booking cancelled by host | Guest, with the host's reason |
+| Listing submitted for review | Every admin |
+| Listing approved / rejected | Host (rejections include the admin's note) |
+| Edits to a live listing approved / rejected | Host |
+| Monthly commission statements created | Each host, with amount, due date and payment instructions |
+| Statement marked paid | Host (receipt) |
+| Daily: stay starts within 2 days | Guest (arrival reminder) |
+| Daily: guest checked out, stay not marked yet | Host ("did the guest stay?") |
+| Daily: statement due within 3 days / overdue | Host |
+
+- Emails are sent **after** the action is saved (Next.js `after()`), so a
+  slow or failing email service never blocks or undoes a booking.
+- Every attempt is recorded in `EmailLog` (who, subject, sent / failed /
+  not sent — never the body). **Admin → Emails** shows the log, whether
+  sending and the daily job are set up, and has a **Send me a test email**
+  button.
+- Guest emails reply to the host and host emails reply to the guest.
+- The daily job is `/api/cron/daily`, run by Vercel Cron at 03:00 UTC
+  (08:00 Maldives time, see `vercel.json`). It only runs when called with
+  the `CRON_SECRET`, and each reminder has a unique key so it's sent at most
+  once even if the job runs again.
+
+**Settings** (Vercel → Settings → Environment Variables):
+
+| Variable | What it's for |
+| --- | --- |
+| `RESEND_API_KEY` | Resend API key. Without it, nothing is sent (emails are logged as "not sent"). |
+| `EMAIL_FROM` | Sender, e.g. `Maldives Marketplace <bookings@your-domain.com>`. Needs a domain verified in Resend. Leave unset until then: the Resend test sender only delivers to the email address of your Resend account. |
+| `CRON_SECRET` | Any long random text. Turns on the daily reminders. |
+| `APP_URL` | Optional. Site address used in email links; defaults to the Vercel production URL. |
 
 ## Bookings & commission
 

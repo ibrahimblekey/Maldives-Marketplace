@@ -115,7 +115,11 @@ export function BookingDetails({ booking, audience }: { booking: BookingDetail; 
         )}
         <dt>Cancellation policy</dt>
         <dd>
-          {freeUntil ? `Free cancellation until ${formatDate(freeUntil)}; ${policy?.refundPercentageAfter ?? 0}% refund after that.` : "No free cancellation."}
+          {!freeUntil
+            ? "No free cancellation."
+            : freeUntil > booking.createdAt
+              ? `Free cancellation until ${formatDate(freeUntil)}; ${policy?.refundPercentageAfter ?? 0}% refund after that.`
+              : `Booked after the free cancellation period ended (${policy?.freeCancellationDays} days before check-in); ${policy?.refundPercentageAfter ?? 0}% refund.`}
         </dd>
         <dt>Booked</dt>
         <dd>{formatDateTime(booking.createdAt)}</dd>

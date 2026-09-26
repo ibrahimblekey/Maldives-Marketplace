@@ -82,6 +82,13 @@ enum CommissionStatementStatus {
   PAID
 }
 
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED // email not configured (no RESEND_API_KEY), nothing was sent
+}
+
 enum MealPlan {
   ROOM_ONLY
   BREAKFAST
@@ -963,4 +970,34 @@ model AdminAuditLog {
 
   @@index([adminUserId])
   @@index([targetType, targetId])
+}
+
+// ----------------------------------------------------------------------------
+// EMAIL LOG
+// ----------------------------------------------------------------------------
+
+// One row per email the platform tried to send (see src/server/email/).
+// Lets an admin check what went out, and `dedupeKey` guarantees scheduled
+// reminders are sent at most once (e.g. "arrival-reminder:<bookingId>").
+// Deliberately stores no email body — only who, what and whether it worked.
+model EmailLog {
+  id String @id @default(cuid())
+
+  toEmail  String
+  template String // e.g. "booking-confirmed-guest"
+  subject  String
+
+  status     EmailStatus @default(QUEUED)
+  error      String?
+  providerId String? // id returned by the email service
+
+  dedupeKey String? @unique
+
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
 }

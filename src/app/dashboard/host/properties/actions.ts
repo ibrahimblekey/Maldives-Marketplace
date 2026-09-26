@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { notifyListingSubmitted } from "@/server/email/notifications";
 import { requireHost } from "@/server/auth/page-guards";
 import {
   policiesSchema,
@@ -322,6 +324,7 @@ export async function submitForReviewAction(propertyId: string): Promise<ActionS
   } catch (err) {
     return { error: userMessageFor(err, "submit-property") };
   }
+  after(() => notifyListingSubmitted(propertyId));
   refresh(propertyId);
   return { error: null };
 }

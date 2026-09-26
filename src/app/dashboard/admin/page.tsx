@@ -56,6 +56,11 @@ export default async function AdminDashboardPage() {
         </Link>
       </p>
       <p>
+        <Link href="/dashboard/admin/emails" style={{ color: "#0e7c86", fontWeight: 600 }}>
+          Emails →
+        </Link>
+      </p>
+      <p>
         User and host management are placeholders for later
         milestones. What matters here is that only ADMIN and SUPER_ADMIN
         accounts can reach this page, and that no user can ever grant

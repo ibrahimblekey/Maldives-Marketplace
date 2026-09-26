@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { notifyChangesReviewed, notifyListingReviewed } from "@/server/email/notifications";
 import { requireAdmin } from "@/server/auth/page-guards";
 import { reviewDecisionReasonSchema } from "@/lib/validation/property";
 import * as reviewService from "@/server/services/property-review-service";
@@ -31,6 +33,7 @@ export async function approveListingAction(propertyId: string, reviewedVersion: 
   } catch (err) {
     return { error: userMessageFor(err, "approve-listing") };
   }
+  after(() => notifyListingReviewed(propertyId, true));
   done(propertyId);
   redirect(`${QUEUE}?done=approved`);
 }
@@ -49,6 +52,7 @@ export async function rejectListingAction(
   } catch (err) {
     return { error: userMessageFor(err, "reject-listing") };
   }
+  after(() => notifyListingReviewed(propertyId, false));
   done(propertyId);
   redirect(`${QUEUE}?done=rejected`);
 }
@@ -61,6 +65,7 @@ export async function approveChangesAction(propertyId: string, reviewedVersion: 
   } catch (err) {
     return { error: userMessageFor(err, "approve-changes") };
   }
+  after(() => notifyChangesReviewed(propertyId, true));
   done(propertyId);
   redirect(`${QUEUE}?done=changes-approved`);
 }
@@ -80,6 +85,7 @@ export async function rejectChangesAction(
   } catch (err) {
     return { error: userMessageFor(err, "reject-changes") };
   }
+  after(() => notifyChangesReviewed(propertyId, false));
   done(propertyId);
   redirect(`${QUEUE}?done=changes-rejected`);
 }

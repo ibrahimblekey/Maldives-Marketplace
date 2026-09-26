@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { notifyStatementPaid, notifyStatementsCreated } from "@/server/email/notifications";
 import { requireAdmin } from "@/server/auth/page-guards";
 import { generateStatements, markStatementPaid, parseBillableMonth } from "@/server/services/commission-service";
 import { userMessageFor } from "@/server/services/errors";
@@ -13,7 +15,8 @@ export async function generateStatementsAction(_prev: ActionState, formData: For
   const month = parseBillableMonth(String(formData.get("month") ?? ""));
   if (!month) return { error: "Choose a month that has already ended." };
   try {
-    const { created, skipped } = await generateStatements(session.user.id, month);
+    const { created, skipped, statementIds } = await generateStatements(session.user.id, month);
+    if (statementIds.length > 0) after(() => notifyStatementsCreated(statementIds));
     revalidatePath(PATH, "layout");
     return {
       error: null,
@@ -35,6 +38,7 @@ export async function markStatementPaidAction(id: string, _prev: ActionState, fo
   } catch (err) {
     return { error: userMessageFor(err, "mark-statement-paid") };
   }
+  after(() => notifyStatementPaid(id));
   revalidatePath(PATH, "layout");
   return { error: null, message: "Marked as paid. If the host's listings were hidden for non-payment, they're visible again." };
 }
