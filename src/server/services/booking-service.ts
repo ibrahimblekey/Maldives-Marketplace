@@ -63,11 +63,15 @@ async function freeUnitIds(db: Tx | typeof prisma, roomId: string, stay: Stay) {
 }
 
 /**
- * A host with an overdue commission bill: their listings are hidden from
- * search and can't be booked until an admin marks the bill paid.
+ * Hosts whose listings may be shown and booked: not suspended by an admin,
+ * and no overdue commission bill. Used by search, property pages and
+ * booking, so a suspension takes effect everywhere immediately.
  */
 export function hostInGoodStanding(now = new Date()): Prisma.HostProfileWhereInput {
-  return { commissionStatements: { none: { status: "DUE", dueDate: { lt: todayInMaldives(now) } } } };
+  return {
+    suspendedAt: null,
+    commissionStatements: { none: { status: "DUE", dueDate: { lt: todayInMaldives(now) } } },
+  };
 }
 
 // ---------------------------------------------------------------------------

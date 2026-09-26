@@ -53,6 +53,18 @@ export default async function TripPage({
         </div>
       )}
       <BookingDetails booking={booking} audience="guest" />
+      {booking.status === "CONFIRMED" && (
+        <div className={styles.noticeWarn} role="note">
+          <p>
+            <strong>Stay safe:</strong> you pay the property only when you arrive. Never send a deposit or bank transfer before
+            your stay, even if someone asks by message, WhatsApp or email. If anyone does,{" "}
+            <Link className={styles.link} href={`/stays/${booking.property.slug}/report`}>
+              report the listing
+            </Link>
+            .
+          </p>
+        </div>
+      )}
 
       {canCancel && (
         <section className={styles.section}>

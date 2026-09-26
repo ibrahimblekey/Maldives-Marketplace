@@ -6,6 +6,7 @@ import { parseStay, toIsoDate, todayInMaldives } from "@/lib/stay-pricing";
 import { getPublicListing, type RoomOffer } from "@/server/services/listing-search-service";
 import { formatCents, plural } from "../../_components/format";
 import { MAX_GUESTS, type RawSearchParams } from "../../_components/search-params";
+import { DepositWarning } from "../../_components/deposit-warning";
 import styles from "../../public.module.css";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<RawSearchParams> };
@@ -262,11 +263,17 @@ export default async function StayPage({ params, searchParams }: Props) {
               {stay ? "Update prices" : "Check prices"}
             </button>
           </form>
+          <div style={{ marginTop: 14 }}>
+            <DepositWarning />
+          </div>
           <p className={styles.soon} style={{ marginTop: 14 }}>
             {stay && bookableOffers.length > 0
               ? "Choose a room and click Reserve. Nothing is charged now: you pay the property when you arrive."
               : "Add your dates to book. Nothing is charged online: you pay the property when you arrive."}
           </p>
+          <Link href={`/stays/${property.slug}/report`} className={styles.reportLink}>
+            Report this listing
+          </Link>
         </aside>
       </div>
     </div>

@@ -89,6 +89,21 @@ enum EmailStatus {
   SKIPPED // email not configured (no RESEND_API_KEY), nothing was sent
 }
 
+enum ListingReportReason {
+  ASKED_TO_PAY_OUTSIDE // host asked for a deposit / transfer outside the platform
+  SCAM_OR_FRAUD
+  FAKE_LISTING // property doesn't exist or isn't what's shown
+  WRONG_INFORMATION
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ListingReportStatus {
+  OPEN
+  RESOLVED // admin took action
+  DISMISSED // admin found nothing wrong
+}
+
 enum MealPlan {
   ROOM_ONLY
   BREAKFAST
@@ -271,6 +286,13 @@ model HostProfile {
   payouts               Payout[]
   commissionStatements  CommissionStatement[]
 
+  // Suspension (anti-scam): while suspendedAt is set, every listing of this
+  // host is hidden from search and can't be booked (see hostInGoodStanding
+  // in booking-service.ts). Set/cleared only by admins, audit-logged.
+  suspendedAt       DateTime?
+  suspensionReason  String?
+  suspendedByUserId String?
+
   @@index([verificationStatus])
 }
 
@@ -421,6 +443,7 @@ model Property {
   updatedAt DateTime @updatedAt
 
   images             PropertyImage[]
+  reports            ListingReport[]
   amenities          PropertyAmenity[]
   rooms              Room[]
   reviews            Review[]
@@ -1000,4 +1023,37 @@ model EmailLog {
   updatedAt DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+// ----------------------------------------------------------------------------
+// LISTING REPORTS (anti-scam)
+// ----------------------------------------------------------------------------
+
+// "Report this listing", from travelers (signed in or not). Reviewed by
+// admins on /dashboard/admin/reports.
+model ListingReport {
+  id String @id @default(cuid())
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  reason  ListingReportReason
+  details String              @db.Text
+
+  reporterUserId String? // null when reported without signing in
+  reporterEmail  String? // optional contact for anonymous reporters
+  // Hash of the reporter's IP, only used to rate-limit report spam. The raw
+  // IP address is never stored.
+  reporterIpHash String
+
+  status           ListingReportStatus @default(OPEN)
+  resolvedByUserId String?
+  resolvedAt       DateTime?
+  resolutionNote   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([propertyId])
+  @@index([reporterIpHash, createdAt])
 }

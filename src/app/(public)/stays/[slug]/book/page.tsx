@@ -11,6 +11,7 @@ import { formatCents, plural } from "../../../_components/format";
 import type { RawSearchParams } from "../../../_components/search-params";
 import { createBookingAction } from "./actions";
 import { BookingForm } from "./booking-form";
+import { DepositWarning } from "../../../_components/deposit-warning";
 import styles from "../../../public.module.css";
 
 export const metadata: Metadata = { title: "Confirm your booking · Maldives Marketplace" };
@@ -123,6 +124,9 @@ export default async function BookPage({
               {policy?.description ? `\n${policy.description}` : ""}
             </dd>
           </dl>
+          <div style={{ marginTop: 16 }}>
+            <DepositWarning reportHref={`/stays/${slug}/report`} />
+          </div>
         </section>
 
         <aside className={`${styles.panel} ${styles.bookingBox}`}>

@@ -10,6 +10,7 @@ import {
   type SeasonalPriceInput,
 } from "@/lib/validation/property";
 import { NotFoundError, UserFacingError } from "./errors";
+import { assertHostNotSuspended } from "./moderation-service";
 
 /**
  * Host-side business rules for property listings.
@@ -224,6 +225,7 @@ export function submissionProblems(property: PropertyDetail): string[] {
 
 export async function createProperty(userId: string, input: PropertyBasicsInput) {
   const hostProfileId = await requireHostProfileId(userId);
+  await assertHostNotSuspended(userId);
   await assertTypeAndIslandExist(input.propertyTypeId, input.islandId);
 
   for (let attempt = 0; ; attempt += 1) {
@@ -634,6 +636,7 @@ export async function movePhoto(userId: string, propertyId: string, imageId: str
 // ---------------------------------------------------------------------------
 
 export async function submitForReview(userId: string, propertyId: string) {
+  await assertHostNotSuspended(userId);
   const property = await getHostProperty(userId, propertyId);
   if (property.status !== "DRAFT" && property.status !== "REJECTED") {
     throw new UserFacingError("Only a draft or rejected listing can be submitted for review.");

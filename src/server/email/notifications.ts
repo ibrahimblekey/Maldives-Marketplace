@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { MEAL_PLAN_LABELS } from "@/lib/validation/property";
 import { todayInMaldives } from "@/lib/stay-pricing";
 import { paymentInstructions } from "@/server/services/commission-service";
+import { REPORT_REASON_LABELS } from "@/server/services/moderation-service";
 import { renderEmail, type EmailContent } from "./layout";
 import { sendEmail } from "./mailer";
 
@@ -105,7 +106,10 @@ export function notifyBookingCreated(bookingId: string) {
           ],
         ],
         button: { label: "View your booking", path: `/dashboard/traveler/trips/${b.id}` },
-        outro: ["Questions about your stay? Reply to this email to reach the host."],
+        outro: [
+          "Questions about your stay? Reply to this email to reach the host.",
+          "Stay safe: you pay the property only when you arrive. Never send a deposit or bank transfer before your stay, even if someone asks by message, WhatsApp or email. If anyone does, please report the listing on our website.",
+        ],
       },
       { replyTo: host.user.email, related }
     );
@@ -385,6 +389,68 @@ export async function sendDailyReminders(now = new Date()) {
   });
 
   return counts;
+}
+
+// ---------------------------------------------------------------------------
+// Anti-scam
+// ---------------------------------------------------------------------------
+
+export function notifyReportCreated(reportId: string) {
+  return safely("report-created", async () => {
+    const r = await prisma.listingReport.findUnique({
+      where: { id: reportId },
+      include: { property: { select: { name: true, hostProfile: { select: { businessName: true } } } } },
+    });
+    if (!r) return;
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, isActive: true },
+      select: { email: true },
+    });
+    const urgent = r.reason === "ASKED_TO_PAY_OUTSIDE" || r.reason === "SCAM_OR_FRAUD";
+    for (const admin of admins) {
+      await send(admin.email, `${urgent ? "URGENT: " : ""}Listing reported: ${r.property.name}`, "report-created-admin", {
+        heading: urgent ? "Possible scam reported" : "A listing was reported",
+        intro: [`Someone reported "${r.property.name}" (host: ${r.property.hostProfile.businessName}).`],
+        rows: [
+          ["Reason", REPORT_REASON_LABELS[r.reason]],
+          ["Details", r.details],
+          ["Reporter", r.reporterEmail ?? (r.reporterUserId ? "Signed-in traveler" : "Anonymous")],
+        ],
+        button: { label: "Review the report", path: "/dashboard/admin/reports" },
+        outro: urgent ? ["If this looks real, suspend the host right away from the Hosts page. Their listings disappear immediately."] : [],
+      }, { related: { type: "ListingReport", id: r.id } });
+    }
+  });
+}
+
+export function notifyHostSuspension(hostProfileId: string, suspended: boolean) {
+  return safely("host-suspension", async () => {
+    const h = await prisma.hostProfile.findUnique({
+      where: { id: hostProfileId },
+      select: { suspensionReason: true, user: { select: { name: true, email: true } } },
+    });
+    if (!h) return;
+    await send(
+      h.user.email,
+      suspended ? "Your host account has been suspended" : "Your host account is active again",
+      suspended ? "host-suspended" : "host-unsuspended",
+      suspended
+        ? {
+            heading: "Your host account has been suspended",
+            intro: [
+              `Hi ${h.user.name}, our team has suspended your host account. Your listings are hidden and can't be booked while the suspension is in place.`,
+            ],
+            rows: h.suspensionReason ? [["Reason", h.suspensionReason]] : [],
+            outro: ["Existing bookings are not cancelled automatically. Reply to this email if you think this is a mistake."],
+          }
+        : {
+            heading: "Your host account is active again",
+            intro: [`Hi ${h.user.name}, your suspension has been lifted. Your approved listings are visible and bookable again.`],
+            button: { label: "Open your host dashboard", path: "/dashboard/host" },
+          },
+      { related: { type: "HostProfile", id: hostProfileId } }
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------
