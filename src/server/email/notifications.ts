@@ -3,6 +3,7 @@ import { MEAL_PLAN_LABELS } from "@/lib/validation/property";
 import { todayInMaldives } from "@/lib/stay-pricing";
 import { paymentInstructions } from "@/server/services/commission-service";
 import { REPORT_REASON_LABELS } from "@/server/services/moderation-service";
+import { bookingPriceLines, guestMixLabel } from "@/lib/booking-breakdown";
 import { renderEmail, type EmailContent } from "./layout";
 import { sendEmail } from "./mailer";
 
@@ -71,8 +72,9 @@ function stayRows(b: LoadedBooking): [string, string][] {
     ["Room", `${b.numRooms} × ${b.room.name} · ${MEAL_PLAN_LABELS[b.room.mealPlan]}`],
     ["Check-in", `${d(b.checkInDate)}${b.property.checkInTime ? `, from ${b.property.checkInTime}` : ""}`],
     ["Check-out", `${d(b.checkOutDate)}${b.property.checkOutTime ? `, by ${b.property.checkOutTime}` : ""} (${nights} night${nights === 1 ? "" : "s"})`],
-    ["Guests", `${b.numGuests} · lead guest ${b.guests[0]?.fullName ?? b.guest.name}`],
-    ["Total", `${money(b.totalAmount, b.currency)} including all taxes, paid to the property on arrival`],
+    ["Guests", `${guestMixLabel(b)} · lead guest ${b.guests[0]?.fullName ?? b.guest.name}`],
+    ...bookingPriceLines(b),
+    ["Payment", "paid to the property on arrival"],
   ];
 }
 
@@ -125,7 +127,7 @@ export function notifyBookingCreated(bookingId: string) {
           ...stayRows(b),
           ["Guest contact", `${b.contactPhone ?? "—"} · ${b.guest.email}`],
           ...(b.specialRequests ? ([["Special requests", b.specialRequests]] as [string, string][]) : []),
-          ["Your share", `${money(b.hostPayoutAmount, b.currency)} (after ${b.commissionRateSnapshot.toString()}% commission)`],
+          ["Your share", `${money(b.hostPayoutAmount, b.currency)} (room + service charge, after ${Number(b.commissionRateSnapshot.toString())}% commission on the room price)`],
         ],
         button: { label: "Open the booking", path: `/dashboard/host/bookings/${b.id}` },
         outro: ["Reply to this email to contact the guest."],

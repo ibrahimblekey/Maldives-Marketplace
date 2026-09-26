@@ -153,3 +153,10 @@
 .reportForm { display: flex; flex-direction: column; gap: 14px; }
 .radio { display: flex; gap: 10px; align-items: flex-start; font-size: 0.9375rem; padding: 6px 0; }
 .radio input { margin-top: 3px; width: 17px; height: 17px; accent-color: #0e7c86; }
+
+/* Price breakdown */
+.priceBreakdown { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #e5eaec; padding-top: 12px; }
+.breakdownRow { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9375rem; color: #33474e; }
+.localsBadge { display: inline-block; background: #e5eefc; color: #1f4e9c; font-weight: 600; font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; }
+.taxNote { font-size: 0.8125rem; color: #5f7479; }
+.breakdownRow span:last-child { white-space: nowrap; }

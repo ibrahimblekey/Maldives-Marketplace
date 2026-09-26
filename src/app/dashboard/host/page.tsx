@@ -30,12 +30,16 @@ export default async function HostDashboardPage() {
   }
 
   const today = todayInMaldives();
-  const [properties, upcomingCount, dueCount] = await Promise.all([
+  const [properties, upcomingCount, dueCount, roomsToCheck] = await Promise.all([
     listHostProperties(session.user.id),
     prisma.booking.count({
       where: { property: { hostProfile: { userId: session.user.id } }, status: "CONFIRMED", checkOutDate: { gt: today } },
     }),
     prisma.commissionStatement.count({ where: { hostProfile: { userId: session.user.id }, status: "DUE" } }),
+    prisma.room.findMany({
+      where: { needsPriceReview: true, isActive: true, property: { hostProfile: { userId: session.user.id } } },
+      select: { name: true, property: { select: { id: true, name: true } } },
+    }),
   ]);
 
   return (
@@ -47,6 +51,25 @@ export default async function HostDashboardPage() {
           Edit host details
         </Link>
       </p>
+      {roomsToCheck.length > 0 && (
+        <div className={styles.noticeWarn}>
+          <p>
+            <strong>Action needed: check your room prices.</strong> Room prices are now entered <strong>before</strong>{" "}
+            service charge and taxes, and the site adds them for guests with a full breakdown. If your prices included
+            taxes, guests are now shown too much. Please open each room, correct the price if needed, and click Save:
+          </p>
+          <p>
+            {roomsToCheck.map((r, i) => (
+              <span key={`${r.property.id}-${r.name}`}>
+                {i > 0 && " · "}
+                <Link className={styles.link} href={`/dashboard/host/properties/${r.property.id}/rooms`}>
+                  {r.property.name}: {r.name}
+                </Link>
+              </span>
+            ))}
+          </p>
+        </div>
+      )}
       {profile.suspendedAt && (
         <div className={styles.noticeError}>
           <p>

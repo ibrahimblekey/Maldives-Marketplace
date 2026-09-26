@@ -1,7 +1,8 @@
 import { Prisma, type MealPlan } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { quoteStay, toCents, type Stay, type StayQuote } from "@/lib/stay-pricing";
-import { hostInGoodStanding } from "./booking-service";
+import { priceBeforeGreenTax, quoteStay, toCents, type Stay, type StayQuote, type TaxRates } from "@/lib/stay-pricing";
+import { currencyProblem, hostInGoodStanding } from "./booking-service";
+import { getPlatformSettings, ratesForProperty } from "./settings-service";
 
 /**
  * Public (traveler-facing) reads of property listings: search results and
@@ -75,8 +76,12 @@ export type RoomOffer = {
   roomsLeft: number;
   quote: StayQuote | null;
   bookable: boolean;
-  /** Price used for "from" and price filtering: per-night average for a stay, else base price. */
+  /** Why it can't be booked for a non-availability reason (e.g. a tourist property not priced in USD). */
+  problem: string | null;
+  /** Room price used for "from" and price filtering: per-night average for a stay, else base price. Before taxes. */
   nightlyCents: number;
+  /** One room for the whole stay incl. service charge + T-GST (green tax depends on who travels). */
+  stayTotalBeforeGreenTaxCents: number | null;
 };
 
 /** Units (by id) that are booked or blocked for any night of the stay. */
@@ -104,20 +109,23 @@ async function unavailableUnitIds(unitIds: string[], stay: Stay): Promise<Set<st
   return new Set([...booked, ...blocked].map((r) => r.roomInventoryUnitId));
 }
 
-function buildOffers(rooms: PublicRoom[], stay: Stay | null, unavailable: Set<string>): RoomOffer[] {
+function buildOffers(rooms: PublicRoom[], stay: Stay | null, unavailable: Set<string>, rates: TaxRates): RoomOffer[] {
   return rooms
     .filter((room) => room.inventoryUnits.length > 0)
     .map((room) => {
       const totalRooms = room.inventoryUnits.length;
       const roomsLeft = stay ? room.inventoryUnits.filter((u) => !unavailable.has(u.id)).length : totalRooms;
       const quote = stay ? quoteStay(room, stay) : null;
+      const problem = currencyProblem(rates.listingType, room.currency);
       return {
         room,
         totalRooms,
         roomsLeft,
         quote,
-        bookable: roomsLeft > 0 && !quote?.stayRuleProblem,
+        problem,
+        bookable: roomsLeft > 0 && !quote?.stayRuleProblem && !problem,
         nightlyCents: quote ? quote.averageNightlyCents : toCents(room.basePrice),
+        stayTotalBeforeGreenTaxCents: quote ? priceBeforeGreenTax(quote.totalCents, rates) : null,
       };
     });
 }
@@ -150,10 +158,15 @@ export type SearchResult = {
   distanceFromBeachMeters: number | null;
   coverUrl: string | null;
   amenities: string[];
+  /** Room price per night, before service charge and taxes. */
   fromNightlyCents: number;
+  /** With dates: one room for the stay incl. service charge + T-GST, before green tax. */
   fromTotalCents: number | null;
   currency: string;
   roomsLeft: number | null;
+  listingType: TaxRates["listingType"];
+  /** Green tax per visitor per night in USD cents (0 for private rentals). */
+  greenTaxPerNightCents: number;
 };
 
 export async function searchListings(criteria: SearchCriteria) {
@@ -169,6 +182,7 @@ export async function searchListings(criteria: SearchCriteria) {
     ],
   };
 
+  const settings = await getPlatformSettings();
   const properties = await prisma.property.findMany({
     where,
     orderBy: { approvedAt: "desc" },
@@ -193,7 +207,8 @@ export async function searchListings(criteria: SearchCriteria) {
 
   const results: SearchResult[] = [];
   for (const p of properties) {
-    const offers = buildOffers(p.rooms, criteria.stay, unavailable);
+    const rates = ratesForProperty(p, settings);
+    const offers = buildOffers(p.rooms, criteria.stay, unavailable, rates);
     if (!sleepsParty(offers, criteria.guests)) continue;
     const best = cheapest(offers);
     if (!best) continue;
@@ -216,8 +231,10 @@ export async function searchListings(criteria: SearchCriteria) {
       coverUrl: p.images[0]?.url ?? null,
       amenities: p.amenities.map((a) => a.amenity.name),
       fromNightlyCents: best.nightlyCents,
-      fromTotalCents: best.quote?.totalCents ?? null,
+      fromTotalCents: best.stayTotalBeforeGreenTaxCents,
       currency: best.room.currency,
+      listingType: rates.listingType,
+      greenTaxPerNightCents: rates.listingType === "PRIVATE_RENTAL" ? 0 : toCents(rates.greenTaxPerNight),
       roomsLeft: criteria.stay ? offers.filter((o) => o.bookable).reduce((n, o) => n + o.roomsLeft, 0) : null,
     });
   }
@@ -261,6 +278,9 @@ export async function getPublicListing(slug: string, stay: Stay | null) {
       distanceFromHarborMeters: true,
       checkInTime: true,
       checkOutTime: true,
+      listingType: true,
+      serviceChargePercent: true,
+      greenTaxTier: true,
       island: { select: { name: true, slug: true, atoll: { select: { name: true, slug: true } } } },
       propertyType: { select: { name: true } },
       images: { where: PUBLIC_PHOTO, orderBy: { sortOrder: "asc" }, select: { id: true, url: true, altText: true } },
@@ -275,8 +295,9 @@ export async function getPublicListing(slug: string, stay: Stay | null) {
   const unavailable = stay
     ? await unavailableUnitIds(property.rooms.flatMap((r) => r.inventoryUnits.map((u) => u.id)), stay)
     : new Set<string>();
-  const offers = buildOffers(property.rooms, stay, unavailable);
-  return { property, offers, cheapest: cheapest(offers) };
+  const rates = ratesForProperty(property, await getPlatformSettings());
+  const offers = buildOffers(property.rooms, stay, unavailable, rates);
+  return { property, offers, rates, cheapest: cheapest(offers) };
 }
 
 /** Atolls and islands that have at least one searchable listing, for the search form. */

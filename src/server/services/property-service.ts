@@ -239,6 +239,7 @@ export async function createProperty(userId: string, input: PropertyBasicsInput)
           description: input.description,
           propertyTypeId: input.propertyTypeId,
           islandId: input.islandId,
+          listingType: input.listingType,
           address: input.address ?? null,
           distanceFromBeachMeters: input.distanceFromBeachMeters ?? null,
           distanceFromHarborMeters: input.distanceFromHarborMeters ?? null,
@@ -261,7 +262,7 @@ export async function updateBasics(
   userId: string,
   propertyId: string,
   input: Pick<PropertyBasicsInput, "name" | "description" | "distanceFromBeachMeters" | "distanceFromHarborMeters"> &
-    Partial<Pick<PropertyBasicsInput, "propertyTypeId" | "islandId" | "address">>
+    Partial<Pick<PropertyBasicsInput, "propertyTypeId" | "islandId" | "address" | "listingType">>
 ): Promise<boolean> {
   const property = await loadOwned(userId, propertyId);
   assertEditable(property);
@@ -274,6 +275,7 @@ export async function updateBasics(
   if (property.status !== "APPROVED") {
     if (!input.propertyTypeId || !input.islandId) throw new UserFacingError("Select a property type and island.");
     await assertTypeAndIslandExist(input.propertyTypeId, input.islandId);
+    if (input.listingType === "TOURIST_PROPERTY") await assertAllRoomsInUsd(propertyId);
     await prisma.property.update({
       where: { id: propertyId },
       data: {
@@ -281,6 +283,7 @@ export async function updateBasics(
         description: input.description,
         propertyTypeId: input.propertyTypeId,
         islandId: input.islandId,
+        ...(input.listingType ? { listingType: input.listingType } : {}),
         address: input.address ?? null,
         ...distances,
       },
@@ -306,6 +309,19 @@ export async function updateBasics(
 // ---------------------------------------------------------------------------
 // Rooms, room counts, seasonal prices
 // ---------------------------------------------------------------------------
+
+/** Green tax is in US dollars, so tourist properties price in USD (docs/decisions.md). */
+const USD_ONLY_MESSAGE =
+  "Licensed tourist properties must set room prices in US dollars (USD), because green tax is charged in USD.";
+
+async function assertAllRoomsInUsd(propertyId: string) {
+  const other = await prisma.room.count({ where: { propertyId, currency: { not: "USD" } } });
+  if (other > 0) throw new UserFacingError(`${USD_ONLY_MESSAGE} Change your room prices to USD first.`);
+}
+
+function assertCurrencyAllowed(property: Pick<Property, "listingType">, currency: string) {
+  if (property.listingType === "TOURIST_PROPERTY" && currency !== "USD") throw new UserFacingError(USD_ONLY_MESSAGE);
+}
 
 async function loadOwnedRoom(userId: string, propertyId: string, roomId: string) {
   const property = await loadOwned(userId, propertyId);
@@ -377,6 +393,7 @@ function roomData(input: RoomInput) {
 export async function createRoom(userId: string, propertyId: string, input: RoomInput) {
   const property = await loadOwned(userId, propertyId);
   assertEditable(property);
+  assertCurrencyAllowed(property, input.currency);
   const amenityIds = await assertAmenitiesExist(input.amenityIds);
 
   return prisma.$transaction(async (tx) => {
@@ -393,10 +410,12 @@ export async function createRoom(userId: string, propertyId: string, input: Room
 export async function updateRoom(userId: string, propertyId: string, roomId: string, input: RoomInput) {
   const { property } = await loadOwnedRoom(userId, propertyId, roomId);
   assertEditable(property);
+  assertCurrencyAllowed(property, input.currency);
   const amenityIds = await assertAmenitiesExist(input.amenityIds);
 
   await prisma.$transaction(async (tx) => {
-    await tx.room.update({ where: { id: roomId }, data: roomData(input) });
+    // Saving the room confirms its price is entered the current way (before taxes).
+    await tx.room.update({ where: { id: roomId }, data: { ...roomData(input), needsPriceReview: false } });
     await setUnitCount(tx, roomId, input.unitCount);
     await tx.roomAmenity.deleteMany({ where: { roomId } });
     if (amenityIds.length > 0) {
@@ -501,10 +520,17 @@ export async function savePolicies(userId: string, propertyId: string, input: Po
     petsAllowed: input.petsAllowed,
     smokingAllowed: input.smokingAllowed,
   };
+  const isTourist = property.listingType === "TOURIST_PROPERTY";
   await prisma.$transaction([
     prisma.property.update({
       where: { id: propertyId },
-      data: { checkInTime: input.checkInTime, checkOutTime: input.checkOutTime },
+      data: {
+        checkInTime: input.checkInTime,
+        checkOutTime: input.checkOutTime,
+        // Taxes & charges apply to tourist properties only. Empty = platform default.
+        serviceChargePercent: isTourist ? (input.serviceChargePercent ?? null) : null,
+        greenTaxTier: isTourist ? input.greenTaxTier : "STANDARD",
+      },
     }),
     prisma.cancellationPolicy.upsert({
       where: { propertyId },

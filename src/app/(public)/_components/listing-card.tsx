@@ -20,16 +20,27 @@ export function ListingCard({ listing, query, nights }: { listing: SearchResult;
         {listing.distanceFromBeachMeters !== null && (
           <span className={styles.cardMeta}>{listing.distanceFromBeachMeters} m to the beach</span>
         )}
+        {listing.listingType === "PRIVATE_RENTAL" && <span className={styles.localsBadge}>Maldivians &amp; residents only</span>}
         <span className={styles.cardPrice}>
           {listing.fromTotalCents !== null && nights ? (
             <>
               <strong>{formatCents(listing.fromTotalCents, listing.currency)}</strong> for {plural(nights, "night")}
               <br />
-              <span className={styles.muted}>about {formatCents(listing.fromNightlyCents, listing.currency)} / night</span>
+              <span className={styles.taxNote}>
+                {listing.listingType === "PRIVATE_RENTAL"
+                  ? "final price, no taxes"
+                  : `incl. service charge & T-GST · + green tax ${formatCents(listing.greenTaxPerNightCents, "USD")} per visitor per night`}
+              </span>
             </>
           ) : (
             <>
               from <strong>{formatCents(listing.fromNightlyCents, listing.currency)}</strong> / night
+              {listing.listingType !== "PRIVATE_RENTAL" && (
+                <>
+                  <br />
+                  <span className={styles.taxNote}>+ service charge &amp; taxes</span>
+                </>
+              )}
             </>
           )}
         </span>
