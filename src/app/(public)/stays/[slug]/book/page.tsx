@@ -76,13 +76,14 @@ export default async function BookPage({
     if (err instanceof NotFoundError) notFound();
     throw err;
   }
-  const { room, quote, roomsLeft } = preview;
+  const { room, quote, roomsLeft, rates, currencyProblem } = preview;
   const [policy, user] = await Promise.all([
     prisma.cancellationPolicy.findUnique({ where: { propertyId: room.property.id } }),
     prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }),
   ]);
   const freeUntil = freeCancellationUntil(stay.checkIn, policy?.freeCancellationDays);
-  const unavailable = quote.stayRuleProblem ?? (roomsLeft === 0 ? "Sorry, this room is no longer available for your dates." : null);
+  const unavailable =
+    currencyProblem ?? quote.stayRuleProblem ?? (roomsLeft === 0 ? "Sorry, this room is no longer available for your dates." : null);
 
   return (
     <div className={styles.container}>
@@ -105,7 +106,15 @@ export default async function BookPage({
             <dd>{longDate.format(stay.checkOut)}</dd>
             <dt>Length</dt>
             <dd>{plural(stay.nights, "night")}</dd>
-            <dt>Price per room</dt>
+            {rates.listingType === "PRIVATE_RENTAL" && (
+              <>
+                <dt>Who can stay</dt>
+                <dd>
+                  <span className={styles.localsBadge}>Maldivians &amp; residents only</span>
+                </dd>
+              </>
+            )}
+            <dt>Room price per room</dt>
             <dd>
               {formatCents(quote.totalCents, room.currency)} for {plural(stay.nights, "night")}
               {quote.nights.some((n) => n.season) &&
@@ -141,8 +150,10 @@ export default async function BookPage({
             </>
           ) : (
             <BookingForm
-              action={createBookingAction.bind(null, slug, room.id, checkIn, checkOut, quote.totalCents)}
+              action={createBookingAction.bind(null, slug, room.id, checkIn, checkOut)}
               perRoomCents={quote.totalCents}
+              nights={stay.nights}
+              rates={rates}
               currency={room.currency}
               roomsLeft={roomsLeft}
               maxOccupancy={room.maxOccupancy}

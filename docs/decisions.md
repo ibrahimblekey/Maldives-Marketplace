@@ -18,3 +18,15 @@ New decisions are added below, newest last, each with its date:
 - **Commission rate (2026-09-25):** 10% for now. Still has to become admin-configurable (see "Commission" above).
 - **Email notifications (2026-09-26):** sent through Resend. Until a domain is verified in Resend, emails only reach the owner's own address.
 - **Business model (2026-09-26):** undecided between commission and subscription. Commission billing stays as built until the owner decides; the anti-scam work goes ahead meanwhile.
+- **Taxes (2026-09-27):** replaced on 2026-09-27, see "Tax rules" below. Until the tax breakdown was built, hosts enter prices that already include T-GST, green tax and any service charge, guests pay exactly the price shown, and the site says "taxes included" wherever a price is shown.
+- **Online payment (2026-09-27):** postponed. Guests keep paying at the property until a payment gateway (e.g. BML Connect) is arranged.
+- **Tax rules (2026-09-27):** at licensed tourist properties, every guest pays room price + the property's service charge (configurable, e.g. 10%) + T-GST 17% calculated on room + service charge. Visitors additionally pay green tax per person per night ($6 or $12, set per property; children under 2 exempt). Maldivians and residents pay everything except green tax. Private rentals (locals-only listings) have no T-GST or green tax; the host's price is final. The T-GST rate, green tax rates and service charge are configurable from admin. Guests see a full price breakdown before booking, and the breakdown is stored with each booking.
+- **Tax rules, details (2026-09-27):**
+  - At booking, the guest enters how many guests are Maldivian citizens or residents and how many are children under 2; green tax is charged on everyone else.
+  - The host chooses "Licensed tourist property" or "Private rental (Maldivians & residents only)" when creating a listing, and the admin checks it at approval; it's locked once the listing is live. Private rentals show a "Maldivians & residents only" label, and guests must confirm everyone is Maldivian or resident.
+  - Service charge: admin sets a default (10%); each tourist property can set its own, including 0%.
+  - Green tax tier ($6 or $12): the host picks it and the admin can correct it. The amounts are set in admin Settings.
+  - Licensed tourist properties price in USD only (green tax is in USD); private rentals may use any currency.
+  - Commission is charged on the room price only, not on service charge or taxes.
+  - Search shows "from USD X / night + service charge & taxes" without dates, and with dates the total incl. service charge and T-GST, with green tax per visitor noted separately. The booking page shows the exact breakdown.
+  - The default commission rate is now set in admin Settings (10%). Per-host rates wait for the business-model decision.

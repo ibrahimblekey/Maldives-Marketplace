@@ -61,6 +61,51 @@ function sameInstant(a: Date | null, iso: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Tax settings (admin check/correction; docs/decisions.md → "Tax rules")
+// ---------------------------------------------------------------------------
+
+export async function updatePropertyTaxSettings(
+  adminUserId: string,
+  propertyId: string,
+  input: { listingType: "TOURIST_PROPERTY" | "PRIVATE_RENTAL"; greenTaxTier: "STANDARD" | "HIGHER"; serviceChargePercent?: string }
+) {
+  await prisma.$transaction(async (tx) => {
+    const before = await tx.property.findUnique({
+      where: { id: propertyId },
+      select: { listingType: true, greenTaxTier: true, serviceChargePercent: true },
+    });
+    if (!before) throw new NotFoundError("Property");
+    if (input.listingType === "TOURIST_PROPERTY") {
+      const nonUsd = await tx.room.count({ where: { propertyId, currency: { not: "USD" } } });
+      if (nonUsd > 0) {
+        throw new UserFacingError("This listing has rooms priced in other currencies. Tourist properties must price in USD; ask the host to change them first.");
+      }
+    }
+    const isTourist = input.listingType === "TOURIST_PROPERTY";
+    await tx.property.update({
+      where: { id: propertyId },
+      data: {
+        listingType: input.listingType,
+        greenTaxTier: isTourist ? input.greenTaxTier : "STANDARD",
+        serviceChargePercent: isTourist ? (input.serviceChargePercent ?? null) : null,
+      },
+    });
+    await tx.adminAuditLog.create({
+      data: {
+        adminUserId,
+        action: "PROPERTY_TAX_SETTINGS_UPDATED",
+        targetType: "Property",
+        targetId: propertyId,
+        metadata: {
+          before: { ...before, serviceChargePercent: before.serviceChargePercent?.toString() ?? null },
+          after: input,
+        },
+      },
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // New listings
 // ---------------------------------------------------------------------------
 

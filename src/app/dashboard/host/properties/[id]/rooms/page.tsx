@@ -20,11 +20,23 @@ export default async function RoomsStepPage({ params }: { params: Promise<{ id: 
         )}
       </div>
       <p className={styles.sectionHint}>
-        Add each kind of room you offer, how many of it you have, and its nightly price. Open a room type to add
+        Add each kind of room you offer, how many of it you have, and its nightly price.{" "}
+        {property.listingType === "TOURIST_PROPERTY"
+          ? "Enter prices in US dollars, before service charge and taxes: the site adds them and shows guests the full breakdown."
+          : "Private rental: enter your final price; no taxes are added."} Open a room type to add
         seasonal prices (e.g. a higher price over New Year). Prices and room counts can be changed at any time, even
         after your listing is live.
       </p>
 
+      {property.rooms.some((r) => r.needsPriceReview) && (
+        <div className={styles.noticeWarn}>
+          <p>
+            <strong>Please check your prices.</strong> Room prices are now entered before service charge and taxes, and the
+            site adds them for guests. Open each room marked &ldquo;check price&rdquo;, correct the price if it included taxes,
+            and click Save.
+          </p>
+        </div>
+      )}
       {property.rooms.length === 0 ? (
         <p className={styles.empty}>No room types yet. Add at least one to continue.</p>
       ) : (
@@ -44,7 +56,15 @@ export default async function RoomsStepPage({ params }: { params: Promise<{ id: 
             <tbody>
               {property.rooms.map((room) => (
                 <tr key={room.id}>
-                  <td>{room.name}</td>
+                  <td>
+                    {room.name}
+                    {room.needsPriceReview && (
+                      <>
+                        {" "}
+                        <span className={styles.badgePENDING_APPROVAL}>check price</span>
+                      </>
+                    )}
+                  </td>
                   <td>{room.inventoryUnits.length}</td>
                   <td>{room.maxOccupancy}</td>
                   <td>{formatMoney(room.basePrice, room.currency)}</td>

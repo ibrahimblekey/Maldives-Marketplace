@@ -1,5 +1,6 @@
 import type { BookingStatus } from "@prisma/client";
 import { MEAL_PLAN_LABELS } from "@/lib/validation/property";
+import { bookingPriceLines, guestMixLabel } from "@/lib/booking-breakdown";
 import type { BookingDetail } from "@/server/services/booking-service";
 import { freeCancellationUntil } from "@/server/services/booking-service";
 import { formatDate, formatDateTime, formatMoney } from "./format";
@@ -32,6 +33,15 @@ export function BookingStatusBadge({ status }: { status: BookingStatus }) {
  * the host's contact details; the host and admin see the guest's, plus the
  * commission split.
  */
+function PriceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{label === "Total" ? <strong>{value}</strong> : value}</dd>
+    </>
+  );
+}
+
 export function BookingDetails({ booking, audience }: { booking: BookingDetail; audience: "guest" | "host" | "admin" }) {
   const policy = booking.property.cancellationPolicy;
   const freeUntil = freeCancellationUntil(booking.checkInDate, policy?.freeCancellationDays);
@@ -68,15 +78,16 @@ export function BookingDetails({ booking, audience }: { booking: BookingDetail; 
         </dd>
         <dt>Guests</dt>
         <dd>
-          {booking.numGuests} · lead guest {leadGuest}
+          {guestMixLabel(booking)} · lead guest {leadGuest}
         </dd>
-        <dt>Total</dt>
-        <dd>
-          <strong>{formatMoney(booking.totalAmount, booking.currency)}</strong>, paid to the property on arrival
-        </dd>
+        {bookingPriceLines(booking).map(([label, value]) => (
+          <PriceRow key={label} label={label} value={value} />
+        ))}
+        <dt>Payment</dt>
+        <dd>Paid to the property on arrival</dd>
         {audience !== "guest" && (
           <>
-            <dt>Commission ({booking.commissionRateSnapshot.toString()}%)</dt>
+            <dt>Commission ({Number(booking.commissionRateSnapshot.toString())}% of room)</dt>
             <dd>
               {formatMoney(booking.commissionAmount, booking.currency)}
               {booking.status === "COMPLETED"
@@ -87,7 +98,7 @@ export function BookingDetails({ booking, audience }: { booking: BookingDetail; 
                   ? " · billed after the stay"
                   : " · not charged"}
             </dd>
-            <dt>Host receives</dt>
+            <dt>Host keeps (room + service − commission)</dt>
             <dd>{formatMoney(booking.hostPayoutAmount, booking.currency)}</dd>
           </>
         )}

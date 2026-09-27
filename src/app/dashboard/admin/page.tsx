@@ -67,6 +67,11 @@ export default async function AdminDashboardPage() {
         </Link>
       </p>
       <p>
+        <Link href="/dashboard/admin/settings" style={{ color: "#0e7c86", fontWeight: 600 }}>
+          Settings (taxes &amp; commission) →
+        </Link>
+      </p>
+      <p>
         <Link href="/dashboard/admin/emails" style={{ color: "#0e7c86", fontWeight: 600 }}>
           Emails →
         </Link>

@@ -1,4 +1,4 @@
-import { MIN_DESCRIPTION_LENGTH } from "@/lib/validation/property";
+import { LISTING_TYPE_LABELS, LISTING_TYPES, MIN_DESCRIPTION_LENGTH } from "@/lib/validation/property";
 import styles from "../../ui.module.css";
 
 type Options = {
@@ -25,11 +25,27 @@ export function BasicsFields({
     address: string | null;
     distanceFromBeachMeters: number | null;
     distanceFromHarborMeters: number | null;
+    listingType: string;
   };
   locationLocked?: boolean;
 }) {
   return (
     <>
+      <fieldset className={styles.fieldset} disabled={locationLocked}>
+        <legend className={styles.label}>Type of listing</legend>
+        {LISTING_TYPES.map((type) => (
+          <label key={type} className={styles.checkbox}>
+            <input type="radio" name="listingType" value={type} required defaultChecked={(initial?.listingType ?? "TOURIST_PROPERTY") === type} />
+            {LISTING_TYPE_LABELS[type]}
+          </label>
+        ))}
+        <span className={styles.help}>
+          Licensed tourist properties (guesthouses, hotels, resorts) charge service charge and T-GST, and visitors pay green
+          tax. Private rentals are only for Maldivians and residents, with no tourism taxes. Our team checks this before
+          approving your listing.
+        </span>
+      </fieldset>
+
       <label className={styles.label}>
         Property name
         <input className={styles.input} name="name" required minLength={3} maxLength={120} defaultValue={initial?.name} placeholder="e.g. Coral View Guesthouse" />
@@ -85,7 +101,7 @@ export function BasicsFields({
       </label>
       {locationLocked && (
         <p className={styles.help}>
-          Property type, island and address can&rsquo;t be changed on a live listing. Contact support if they&rsquo;re
+          Listing type, property type, island and address can&rsquo;t be changed on a live listing. Contact support if they&rsquo;re
           wrong.
         </p>
       )}

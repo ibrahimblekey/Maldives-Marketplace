@@ -21,7 +21,8 @@ export default async function NewRoomPage({ params }: { params: Promise<{ id: st
       <h2 className={styles.sectionTitle}>Add a room type</h2>
       <p className={styles.sectionHint}>You can add seasonal prices after saving.</p>
       <ActionForm action={createRoomAction.bind(null, property.id)} submitLabel="Add room type" pendingLabel="Adding...">
-        <RoomFields amenities={amenities} />
+        <RoomFields
+              listingType={property.listingType} amenities={amenities} />
       </ActionForm>
     </section>
   );

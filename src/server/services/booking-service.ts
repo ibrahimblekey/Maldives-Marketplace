@@ -1,6 +1,14 @@
 import { Prisma, type BookingStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { centsToAmount, quoteStay, todayInMaldives, type Stay } from "@/lib/stay-pricing";
+import {
+  centsToAmount,
+  priceBreakdown,
+  quoteStay,
+  toCents,
+  todayInMaldives,
+  type Stay,
+} from "@/lib/stay-pricing";
+import { getPlatformSettings, ratesForProperty } from "./settings-service";
 import { NotFoundError, UserFacingError } from "./errors";
 
 /**
@@ -26,7 +34,6 @@ import { NotFoundError, UserFacingError } from "./errors";
  * both in one transaction.
  */
 
-export const COMMISSION_PERCENT = 10;
 /** After this many days past check-out, a stay the host didn't mark counts as completed. */
 export const AUTO_COMPLETE_AFTER_DAYS = 7;
 const MAX_ROOMS_PER_BOOKING = 10;
@@ -34,9 +41,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Tx = Prisma.TransactionClient;
 
-/** Commission in cents: rounded half-up to the cent. */
-export function commissionCents(totalCents: number, percent = COMMISSION_PERCENT) {
-  return Math.round((totalCents * percent) / 100);
+/**
+ * Commission in cents, rounded to the cent. Charged on the room price only,
+ * never on the service charge (staff) or taxes (government); see
+ * docs/decisions.md. The rate comes from Admin → Settings.
+ */
+export function commissionCents(roomCents: number, percent: string) {
+  return Math.round((roomCents * toCents(percent)) / 10_000);
 }
 
 // ---------------------------------------------------------------------------
@@ -87,19 +98,45 @@ async function loadBookableRoom(db: Tx | typeof prisma, propertySlug: string, ro
     },
     include: {
       seasonalPrices: true,
-      property: { select: { id: true, name: true, slug: true, hostProfile: { select: { userId: true } } } },
+      property: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          listingType: true,
+          serviceChargePercent: true,
+          greenTaxTier: true,
+          hostProfile: { select: { userId: true } },
+        },
+      },
     },
   });
   if (!room) throw new NotFoundError("Room");
   return room;
 }
 
+/**
+ * Green tax is a US-dollar amount, so tourist properties must price in USD
+ * (docs/decisions.md → "Tax rules"). Private rentals may use any currency.
+ */
+export function currencyProblem(listingType: string, currency: string) {
+  return listingType === "TOURIST_PROPERTY" && currency !== "USD"
+    ? "This property's prices aren't in US dollars yet, so it can't be booked right now."
+    : null;
+}
+
 /** What the booking page shows before the traveler confirms. */
 export async function previewBooking(propertySlug: string, roomId: string, stay: Stay) {
-  const room = await loadBookableRoom(prisma, propertySlug, roomId);
+  const [room, settings] = await Promise.all([loadBookableRoom(prisma, propertySlug, roomId), getPlatformSettings()]);
   const quote = quoteStay(room, stay);
   const roomsLeft = (await freeUnitIds(prisma, roomId, stay)).length;
-  return { room, quote, roomsLeft: Math.min(roomsLeft, MAX_ROOMS_PER_BOOKING) };
+  return {
+    room,
+    quote,
+    rates: ratesForProperty(room.property, settings),
+    currencyProblem: currencyProblem(room.property.listingType, room.currency),
+    roomsLeft: Math.min(roomsLeft, MAX_ROOMS_PER_BOOKING),
+  };
 }
 
 export type CreateBookingInput = {
@@ -108,10 +145,14 @@ export type CreateBookingInput = {
   stay: Stay;
   numRooms: number;
   numGuests: number;
+  /** Guests who are Maldivian citizens or residents (no green tax). */
+  localGuests: number;
+  /** Visitors under 2 (no green tax). */
+  infantGuests: number;
   guestName: string;
   contactPhone: string;
   specialRequests?: string;
-  /** The total the traveler was shown, in cents. Refused if the real price differs. */
+  /** The total the traveler was shown (with taxes), in cents. Refused if the real price differs. */
   expectedTotalCents: number;
 };
 
@@ -146,10 +187,26 @@ export async function createBooking(guestUserId: string, input: CreateBookingInp
         );
       }
 
+      const isPrivateRental = room.property.listingType === "PRIVATE_RENTAL";
+      if (input.localGuests < 0 || input.infantGuests < 0 || input.localGuests + input.infantGuests > input.numGuests) {
+        throw new UserFacingError("The numbers of Maldivian/resident guests and children under 2 don't add up to your total guests.");
+      }
+      if (isPrivateRental && input.localGuests !== input.numGuests) {
+        throw new UserFacingError("This private rental is for Maldivians and residents only.");
+      }
+      const currencyIssue = currencyProblem(room.property.listingType, room.currency);
+      if (currencyIssue) throw new UserFacingError(currencyIssue);
+
       const quote = quoteStay(room, input.stay);
       if (quote.stayRuleProblem) throw new UserFacingError(quote.stayRuleProblem);
-      const totalCents = quote.totalCents * input.numRooms;
-      if (totalCents !== input.expectedTotalCents) {
+      const settings = await getPlatformSettings();
+      const rates = ratesForProperty(room.property, settings);
+      const price = priceBreakdown(quote.totalCents, input.numRooms, input.stay.nights, rates, {
+        guests: input.numGuests,
+        localGuests: input.localGuests,
+        infantGuests: isPrivateRental ? 0 : input.infantGuests,
+      });
+      if (price.totalCents !== input.expectedTotalCents) {
         throw new UserFacingError("The price for these dates has just changed. Please check the new price and confirm again.");
       }
 
@@ -162,7 +219,8 @@ export async function createBooking(guestUserId: string, input: CreateBookingInp
         );
       }
 
-      const commission = commissionCents(totalCents);
+      const commissionPercent = settings.commissionPercent.toString();
+      const commission = commissionCents(price.roomCents, commissionPercent);
       const booking = await tx.booking.create({
         data: {
           bookingReference: await nextBookingReference(tx),
@@ -173,12 +231,25 @@ export async function createBooking(guestUserId: string, input: CreateBookingInp
           checkOutDate: input.stay.checkOut,
           numGuests: input.numGuests,
           numRooms: input.numRooms,
-          subtotalAmount: centsToAmount(totalCents),
-          totalAmount: centsToAmount(totalCents),
+          subtotalAmount: centsToAmount(price.roomCents),
+          serviceChargeAmount: centsToAmount(price.serviceChargeCents),
+          tgstAmount: centsToAmount(price.tgstCents),
+          greenTaxAmount: centsToAmount(price.greenTaxCents),
+          taxAmount: centsToAmount(price.tgstCents + price.greenTaxCents),
+          totalAmount: centsToAmount(price.totalCents),
+          listingTypeSnapshot: room.property.listingType,
+          serviceChargePercent: isPrivateRental ? null : rates.serviceChargePercent,
+          tgstPercent: isPrivateRental ? null : rates.tgstPercent,
+          greenTaxPerNight: isPrivateRental ? null : rates.greenTaxPerNight,
+          greenTaxGuests: price.greenTaxGuests,
+          localGuests: input.localGuests,
+          infantGuests: isPrivateRental ? 0 : input.infantGuests,
           currency: room.currency,
-          commissionRateSnapshot: String(COMMISSION_PERCENT),
+          commissionRateSnapshot: commissionPercent,
           commissionAmount: centsToAmount(commission),
-          hostPayoutAmount: centsToAmount(totalCents - commission),
+          // What the host keeps: room + service charge − commission. Taxes are
+          // collected by the host on behalf of the government.
+          hostPayoutAmount: centsToAmount(price.roomCents + price.serviceChargeCents - commission),
           status: "CONFIRMED",
           paymentStatus: "PENDING", // paid to the host at the property
           specialRequests: input.specialRequests || null,

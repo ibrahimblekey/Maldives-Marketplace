@@ -48,7 +48,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           <input type="hidden" name="sort" value={criteria.sort} />
 
           <div>
-            <div className={styles.filterTitle}>Price per night (USD)</div>
+            <div className={styles.filterTitle}>Room price per night (USD, before taxes)</div>
             <div className={styles.priceRow}>
               <input className={styles.input} type="number" name="minPrice" min={0} placeholder="Min" defaultValue={criteria.minPrice ?? ""} aria-label="Minimum price" />
               –

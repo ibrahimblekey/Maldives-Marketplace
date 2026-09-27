@@ -7,6 +7,34 @@ bookings (pay at the property) with monthly commission billing, email
 notifications, and anti-scam tools. No online payments yet — see
 [Project architecture](#project-architecture).
 
+## Taxes & charges
+
+Per `docs/decisions.md` → "Tax rules". The calculation lives in
+`src/lib/stay-pricing.ts` (`priceBreakdown`) and is used unchanged by the
+booking page (live), the server (authoritative), search and property pages.
+
+| Listing type | Guest pays |
+| --- | --- |
+| Licensed tourist property | room + service charge (property %, default in Settings) + T-GST on (room + service charge) + green tax per visitor aged 2+ per night (tier $6/$12, amounts in Settings). Maldivians/residents pay no green tax. Prices in USD only. |
+| Private rental (Maldivians & residents only) | the host's price, nothing added. Guests must confirm everyone is Maldivian or resident. |
+
+- **Admin → Settings:** T-GST %, both green tax amounts, the default
+  service charge and the commission %. Changes are audit-logged and only
+  affect new bookings.
+- **Admin → listing page → Taxes & charges:** correct a listing's type,
+  green tax tier and service charge.
+- **Hosts** choose the listing type in step 1 (locked once live), and set
+  their service charge and green tax tier in step 4 (Policies).
+- **Every booking stores its breakdown:** room, service charge %/amount,
+  T-GST %/amount, green tax per night/guests/amount, guest mix, and the
+  listing type. Bookings made before this have no breakdown and show
+  "taxes included".
+- **Commission** is charged on the room price only. The host keeps room +
+  service charge − commission, and collects taxes for the government.
+- **Existing rooms** were priced with taxes included, so the migration marks
+  them `needsPriceReview`. Hosts see a warning until they re-save each room
+  with its before-tax price.
+
 ## Anti-scam tools
 
 Per `docs/decisions.md` → "Anti-scam". Logic in
@@ -76,8 +104,8 @@ Sent through [Resend](https://resend.com) (`src/server/email/`).
 ## Bookings & commission
 
 **Model:** instant booking, guest pays the property on arrival, the
-platform keeps **10%** commission (`COMMISSION_PERCENT` in
-`src/server/services/booking-service.ts`), billed to hosts monthly.
+platform keeps a commission on the room price (default 10%, set in
+**Admin → Settings**), billed to hosts monthly.
 
 - **Traveler:** property page (with dates) → **Reserve** on a room → sign in
   or sign up (they're brought back to the booking) → choose number of rooms,

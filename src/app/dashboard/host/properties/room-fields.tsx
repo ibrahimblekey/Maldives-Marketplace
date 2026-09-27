@@ -22,11 +22,16 @@ type RoomInitial = {
 export function RoomFields({
   amenities,
   initial,
+  listingType,
 }: {
   amenities: { id: string; name: string }[];
   initial?: RoomInitial;
+  listingType: string;
 }) {
   const selected = new Set(initial?.amenityIds ?? []);
+  const isTourist = listingType === "TOURIST_PROPERTY";
+  // Green tax is in USD, so tourist properties price in USD (docs/decisions.md → "Tax rules").
+  const currencies = isTourist ? (["USD"] as const) : CURRENCIES;
   return (
     <>
       <label className={styles.label}>
@@ -46,12 +51,17 @@ export function RoomFields({
       <div className={styles.row}>
         <label className={styles.label}>
           Price per night
+          <span className={styles.help}>
+            {isTourist
+              ? "Room price before service charge and taxes. The site adds your service charge and T-GST, and green tax for visitors, and shows guests the full breakdown."
+              : "Your final price. Private rentals have no service charge or tourism taxes."}
+          </span>
           <input className={styles.input} name="basePrice" type="number" required min={0.01} step={0.01} inputMode="decimal" defaultValue={initial?.basePrice} placeholder="e.g. 85" />
         </label>
         <label className={styles.label}>
           Currency
           <select className={styles.select} name="currency" required defaultValue={initial?.currency ?? "USD"}>
-            {CURRENCIES.map((c) => (
+            {currencies.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>

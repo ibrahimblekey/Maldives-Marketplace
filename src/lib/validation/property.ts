@@ -12,6 +12,13 @@ export const MAX_PHOTOS = 30;
 export const MIN_DESCRIPTION_LENGTH = 50;
 
 export const CURRENCIES = ["USD", "MVR", "EUR", "GBP", "INR"] as const;
+export const LISTING_TYPES = ["TOURIST_PROPERTY", "PRIVATE_RENTAL"] as const;
+export const GREEN_TAX_TIERS = ["STANDARD", "HIGHER"] as const;
+
+export const LISTING_TYPE_LABELS: Record<(typeof LISTING_TYPES)[number], string> = {
+  TOURIST_PROPERTY: "Licensed tourist property",
+  PRIVATE_RENTAL: "Private rental (Maldivians & residents only)",
+};
 export const MEAL_PLANS = ["ROOM_ONLY", "BREAKFAST", "HALF_BOARD", "FULL_BOARD", "ALL_INCLUSIVE"] as const;
 
 export const MEAL_PLAN_LABELS: Record<(typeof MEAL_PLANS)[number], string> = {
@@ -82,6 +89,7 @@ export const propertyBasicsSchema = z.object({
   description: descriptionSchema,
   propertyTypeId: z.string().trim().min(1, "Select a property type"),
   islandId: z.string().trim().min(1, "Select an island"),
+  listingType: z.enum(LISTING_TYPES, { message: "Choose the type of listing" }),
   address: optionalText(300, "Address"),
   distanceFromBeachMeters: optionalInt(0, 100000, "Distance from the beach"),
   distanceFromHarborMeters: optionalInt(0, 100000, "Distance from the harbour"),
@@ -137,6 +145,16 @@ export const policiesSchema = z.object({
   extraBedPolicy: optionalText(1000, "Extra bed policy"),
   petsAllowed: z.boolean(),
   smokingAllowed: z.boolean(),
+  // Tourist properties only (ignored for private rentals). Empty = platform default.
+  serviceChargePercent: z.preprocess(
+    blankToUndefined,
+    z
+      .string()
+      .trim()
+      .regex(/^\d{1,2}(\.\d{1,2})?$/, "Service charge must be a percentage like 10 or 12.5")
+      .optional()
+  ),
+  greenTaxTier: z.enum(GREEN_TAX_TIERS).default("STANDARD"),
 });
 export type PoliciesInput = z.infer<typeof policiesSchema>;
 

@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { notifyChangesReviewed, notifyListingReviewed } from "@/server/email/notifications";
 import { requireAdmin } from "@/server/auth/page-guards";
 import { reviewDecisionReasonSchema } from "@/lib/validation/property";
+import { propertyTaxSchema } from "@/lib/validation/settings";
 import * as reviewService from "@/server/services/property-review-service";
 import { userMessageFor } from "@/server/services/errors";
 import { deletePropertyPhotos } from "@/server/storage/photo-storage";
@@ -19,6 +20,20 @@ import type { ActionState } from "../../_components/action-state";
  */
 
 const QUEUE = "/dashboard/admin/properties";
+
+/** Admin correction of a listing's tax settings (listing type, green tax tier, service charge). */
+export async function savePropertyTaxAction(propertyId: string, _prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await requireAdmin(`${QUEUE}/${propertyId}`);
+  const parsed = propertyTaxSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  try {
+    await reviewService.updatePropertyTaxSettings(session.user.id, propertyId, parsed.data);
+  } catch (err) {
+    return { error: userMessageFor(err, "property-tax") };
+  }
+  revalidatePath("/", "layout");
+  return { error: null, message: "Tax settings saved. They apply to new bookings." };
+}
 
 function done(propertyId: string) {
   revalidatePath(QUEUE, "layout");
