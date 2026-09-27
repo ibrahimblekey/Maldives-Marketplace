@@ -20,6 +20,10 @@ export function ListingCard({ listing, query, nights }: { listing: SearchResult;
         {listing.distanceFromBeachMeters !== null && (
           <span className={styles.cardMeta}>{listing.distanceFromBeachMeters} m to the beach</span>
         )}
+        {/* Search only returns verified hosts' listings (hostInGoodStanding). */}
+        <span>
+          <span className={styles.verifiedBadge}>✓ Verified host</span>
+        </span>
         {listing.listingType === "PRIVATE_RENTAL" && <span className={styles.localsBadge}>Maldivians &amp; residents only</span>}
         <span className={styles.cardPrice}>
           {listing.fromTotalCents !== null && nights ? (

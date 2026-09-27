@@ -2,33 +2,13 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { shrinkImage } from "../../../../_components/shrink-image";
 import styles from "../../../../ui.module.css";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 const MAX_ORIGINAL_BYTES = 20 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // must match MAX_PHOTO_BYTES on the server
 const MAX_EDGE = 2000; // px — plenty for a listing photo, and fast on slow island connections
-
-/**
- * Shrinks a photo in the browser before upload: phone photos are often
- * 5–15 MB, which is slow to send and over Vercel's 4.5 MB request limit.
- * Re-encoding also strips location (EXIF) data from the host's phone.
- */
-async function prepare(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-
-  for (const quality of [0.85, 0.7, 0.55]) {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-    if (blob && blob.size <= MAX_UPLOAD_BYTES) return blob;
-  }
-  throw new Error("could not make the photo small enough");
-}
 
 export function PhotoUploader({ propertyId, remainingSlots }: { propertyId: string; remainingSlots: number }) {
   const router = useRouter();
@@ -59,7 +39,7 @@ export function PhotoUploader({ propertyId, remainingSlots }: { propertyId: stri
         continue;
       }
       try {
-        const blob = await prepare(file);
+        const blob = await shrinkImage(file, { maxEdge: MAX_EDGE, maxBytes: MAX_UPLOAD_BYTES });
         const body = new FormData();
         body.append("photo", blob, "photo.jpg");
         const response = await fetch(`/api/host/properties/${propertyId}/photos`, { method: "POST", body });

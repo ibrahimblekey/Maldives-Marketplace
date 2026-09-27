@@ -74,12 +74,14 @@ async function freeUnitIds(db: Tx | typeof prisma, roomId: string, stay: Stay) {
 }
 
 /**
- * Hosts whose listings may be shown and booked: not suspended by an admin,
- * and no overdue commission bill. Used by search, property pages and
- * booking, so a suspension takes effect everywhere immediately.
+ * Hosts whose listings may be shown and booked: verified by an admin (see
+ * verification-service.ts), not suspended, and no overdue commission bill.
+ * Used by search, property pages and booking, so a suspension or a revoked
+ * verification takes effect everywhere immediately.
  */
 export function hostInGoodStanding(now = new Date()): Prisma.HostProfileWhereInput {
   return {
+    verificationStatus: "APPROVED",
     suspendedAt: null,
     commissionStatements: { none: { status: "DUE", dueDate: { lt: todayInMaldives(now) } } },
   };

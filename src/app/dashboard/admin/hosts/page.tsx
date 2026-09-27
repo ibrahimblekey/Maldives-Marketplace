@@ -2,10 +2,13 @@ import Link from "next/link";
 import { requireAdmin } from "@/server/auth/page-guards";
 import { listHosts } from "@/server/services/moderation-service";
 import { formatDateTime } from "../../_components/format";
+import { VERIFICATION_STATUS_LABELS } from "@/server/services/verification-service";
 import styles from "../../ui.module.css";
 
 const FILTERS = [
   { value: "all", label: "All hosts" },
+  { value: "verification", label: "Waiting for verification" },
+  { value: "unverified", label: "Not verified" },
   { value: "reported", label: "With open reports" },
   { value: "suspended", label: "Suspended" },
 ] as const;
@@ -24,7 +27,7 @@ export default async function AdminHostsPage({ searchParams }: { searchParams: P
         ← Admin dashboard
       </Link>
       <h1 className={styles.pageTitle}>Hosts</h1>
-      <p className={styles.pageHint}>Everyone who lists properties. Open a host to see their listings, bookings and reports, or to suspend them.</p>
+      <p className={styles.pageHint}>Everyone who lists properties. Open a host to check their verification documents, see their listings, bookings and reports, or suspend them.</p>
 
       <form className={styles.buttonRow} style={{ marginBottom: 12 }}>
         <input className={styles.input} style={{ maxWidth: 320 }} name="q" defaultValue={search} placeholder="Search name, email or phone" />
@@ -52,6 +55,7 @@ export default async function AdminHostsPage({ searchParams }: { searchParams: P
                   <th>Host</th>
                   <th>Contact</th>
                   <th>Listings</th>
+                  <th>Verification</th>
                   <th>Open reports</th>
                   <th>Status</th>
                   <th></th>
@@ -70,6 +74,15 @@ export default async function AdminHostsPage({ searchParams }: { searchParams: P
                     </td>
                     <td>
                       {h.liveListings} live / {h._count.properties}
+                    </td>
+                    <td>
+                      {h.verificationStatus === "APPROVED" ? (
+                        <span className={styles.badgeAPPROVED}>Verified</span>
+                      ) : (
+                        <span className={h.verificationStatus === "UNDER_REVIEW" ? styles.badgePENDING_APPROVAL : styles.badgeDRAFT}>
+                          {VERIFICATION_STATUS_LABELS[h.verificationStatus]}
+                        </span>
+                      )}
                     </td>
                     <td>{h.openReports > 0 ? <span className={styles.badgeREJECTED}>{h.openReports}</span> : "0"}</td>
                     <td>

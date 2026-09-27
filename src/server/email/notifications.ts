@@ -185,7 +185,7 @@ async function loadListing(propertyId: string) {
       status: true,
       rejectionReason: true,
       changesRejectionReason: true,
-      hostProfile: { select: { businessName: true, user: { select: { name: true, email: true } } } },
+      hostProfile: { select: { businessName: true, verificationStatus: true, user: { select: { name: true, email: true } } } },
     },
   });
 }
@@ -214,7 +214,16 @@ export function notifyListingReviewed(propertyId: string, approved: boolean) {
     if (!p) return;
     const to = p.hostProfile.user.email;
     const related = { type: "Property", id: p.id };
-    if (approved) {
+    if (approved && p.hostProfile.verificationStatus !== "APPROVED") {
+      await send(to, `Your listing "${p.name}" is approved: one step left`, "listing-approved-unverified-host", {
+        heading: "Your listing is approved",
+        intro: [
+          `Good news, ${p.hostProfile.user.name}: our team approved "${p.name}".`,
+          "Travelers will see it as soon as your business is verified. If you haven't yet, send us your tourism licence and documents from the Verification page.",
+        ],
+        button: { label: "Go to verification", path: "/dashboard/host/verification" },
+      }, { related });
+    } else if (approved) {
       await send(to, `Your listing "${p.name}" is live`, "listing-approved-host", {
         heading: "Your listing is live 🎉",
         intro: [`Good news, ${p.hostProfile.user.name}: our team approved "${p.name}". Travelers can now find and book it.`],
@@ -451,6 +460,74 @@ export function notifyHostSuspension(hostProfileId: string, suspended: boolean) 
             button: { label: "Open your host dashboard", path: "/dashboard/host" },
           },
       { related: { type: "HostProfile", id: hostProfileId } }
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Host verification
+// ---------------------------------------------------------------------------
+
+export function notifyVerificationSubmitted(hostUserId: string) {
+  return safely("verification-submitted", async () => {
+    const h = await prisma.hostProfile.findUnique({
+      where: { userId: hostUserId },
+      select: { id: true, businessName: true, licenceBusinessName: true, licenceNumber: true },
+    });
+    if (!h) return;
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, isActive: true },
+      select: { email: true },
+    });
+    for (const admin of admins) {
+      await send(admin.email, `Host to verify: ${h.businessName}`, "verification-submitted-admin", {
+        heading: "A host is waiting for verification",
+        intro: [`${h.businessName} submitted their licence and documents. Their listings stay hidden until you approve them.`],
+        rows: [
+          ["Name on licence", h.licenceBusinessName ?? "—"],
+          ["Licence number", h.licenceNumber ?? "—"],
+        ],
+        button: { label: "Review the documents", path: `/dashboard/admin/hosts/${h.id}` },
+        outro: ["Remember to call the host to confirm their phone number before approving."],
+      }, { related: { type: "HostProfile", id: h.id } });
+    }
+  });
+}
+
+export function notifyVerificationReviewed(hostProfileId: string, outcome: "approved" | "rejected" | "revoked") {
+  return safely("verification-reviewed", async () => {
+    const h = await prisma.hostProfile.findUnique({
+      where: { id: hostProfileId },
+      select: { verificationRejectionReason: true, user: { select: { name: true, email: true } } },
+    });
+    if (!h) return;
+    const related = { type: "HostProfile", id: hostProfileId };
+    if (outcome === "approved") {
+      await send(h.user.email, "You're a verified host", "verification-approved-host", {
+        heading: "You're verified ✅",
+        intro: [
+          `Good news, ${h.user.name}: our team checked your licence and documents. Your approved listings are now visible to travelers, with a "Verified host" badge.`,
+        ],
+        button: { label: "Open your host dashboard", path: "/dashboard/host" },
+      }, { related });
+      return;
+    }
+    await send(
+      h.user.email,
+      outcome === "revoked" ? "Your host verification needs updating" : "Your verification needs a few changes",
+      outcome === "revoked" ? "verification-revoked-host" : "verification-rejected-host",
+      {
+        heading: outcome === "revoked" ? "Your verification needs updating" : "Your verification needs a few changes",
+        intro: [
+          outcome === "revoked"
+            ? `Hi ${h.user.name}, our team has asked you to update your verification. Your listings are hidden until it's approved again.`
+            : `Hi ${h.user.name}, our team reviewed your documents and needs the following before approving you:`,
+        ],
+        rows: [["Our note", h.verificationRejectionReason ?? "—"]],
+        button: { label: "Update your verification", path: "/dashboard/host/verification" },
+        outro: ["Make the changes, then submit again from the same page."],
+      },
+      { related }
     );
   });
 }

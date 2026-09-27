@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireHost } from "@/server/auth/page-guards";
-import { getHostProfile } from "@/server/services/host-service";
+import { getHostProfile, hostDetailsLocked } from "@/server/services/host-service";
 import { ActionForm } from "../../_components/action-form";
 import { HostProfileFields } from "../../_components/host-profile-fields";
 import { saveHostProfileAction } from "../actions";
@@ -17,9 +17,18 @@ export default async function HostProfilePage() {
       </Link>
       <h1 className={styles.pageTitle}>Host details</h1>
       <p className={styles.pageHint}>How travelers and our team know you.</p>
+      {profile && hostDetailsLocked(profile) && (
+        <div className={styles.notice}>
+          <p>
+            {profile.verificationStatus === "APPROVED"
+              ? "Your business name and phone number were checked when you were verified, so they can't be changed here. Contact support if they change."
+              : "Your business name and phone number are locked while your verification is being reviewed."}
+          </p>
+        </div>
+      )}
       <section className={styles.section}>
         <ActionForm action={saveHostProfileAction} submitLabel="Save details">
-          <HostProfileFields initial={profile ?? undefined} />
+          <HostProfileFields initial={profile ?? undefined} locked={profile ? hostDetailsLocked(profile) : false} />
         </ActionForm>
       </section>
     </div>
