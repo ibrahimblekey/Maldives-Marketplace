@@ -30,3 +30,4 @@ New decisions are added below, newest last, each with its date:
   - Commission is charged on the room price only, not on service charge or taxes.
   - Search shows "from USD X / night + service charge & taxes" without dates, and with dates the total incl. service charge and T-GST, with green tax per visitor noted separately. The booking page shows the exact breakdown.
   - The default commission rate is now set in admin Settings (10%). Per-host rates wait for the business-model decision.
+- **Commission visibility (2026-09-27):** commission is private between the host and the platform. Travelers never see it; they only see the room price, service charge and taxes. Hosts see it in their booking emails, bookings and monthly statements.

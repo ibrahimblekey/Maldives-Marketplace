@@ -102,9 +102,11 @@
 .amenityGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 16px; }
 .amenityGrid li { list-style: none; }
 .amenityGrid li::before { content: "✓  "; color: #0e7c86; font-weight: 700; }
-.roomCard { border: 1px solid #e5eaec; border-radius: 12px; padding: 16px; display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 12px; }
+.roomCard { border: 1px solid #e5eaec; border-radius: 12px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, 270px); gap: 16px; margin-bottom: 12px; }
 .roomName { font-weight: 700; font-size: 1.0625rem; margin-bottom: 4px; }
-.roomPrice { text-align: right; min-width: 150px; }
+.roomPrice { text-align: right; }
+.roomPrice .taxNote { margin-top: 4px; line-height: 1.45; }
+.noWrap { white-space: nowrap; }
 .roomPrice strong { font-size: 1.25rem; display: block; }
 .roomUnavailable { color: #b3261e; font-size: 0.875rem; font-weight: 600; }
 .breakdown { font-size: 0.8125rem; color: #5f7479; margin-top: 6px; }

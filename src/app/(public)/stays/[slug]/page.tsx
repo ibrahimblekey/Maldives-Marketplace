@@ -65,9 +65,17 @@ function RoomPrice({ offer, nights, bookHref, rates }: { offer: RoomOffer; night
       <strong>{formatCents(offer.stayTotalBeforeGreenTaxCents ?? offer.quote.totalCents, currency)}</strong>
       <span className={styles.muted}>for {plural(nights ?? 0, "night")}</span>
       <div className={styles.taxNote}>
-        {isPrivate
-          ? "final price, no taxes"
-          : `room ${formatCents(offer.quote.totalCents, currency)} + ${pct(rates.serviceChargePercent)} service charge + ${pct(rates.tgstPercent)} T-GST; green tax ${formatCents(toCents(rates.greenTaxPerNight), "USD")} per visitor per night extra`}
+        {isPrivate ? (
+          "final price, no taxes"
+        ) : (
+          <>
+            <span className={styles.noWrap}>
+              Room {formatCents(offer.quote.totalCents, currency)} + {pct(rates.serviceChargePercent)} service + {pct(rates.tgstPercent)} T&#8209;GST
+            </span>
+            <br />
+            <span className={styles.noWrap}>+ green tax {formatCents(toCents(rates.greenTaxPerNight), "USD")} per visitor/night</span>
+          </>
+        )}
       </div>
       {offer.roomsLeft <= 3 && <div className={styles.scarcity}>Only {plural(offer.roomsLeft, "room")} left</div>}
       {bookHref && (
