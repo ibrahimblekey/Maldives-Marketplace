@@ -1,7 +1,8 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type HostVerificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { HostProfileInput } from "@/lib/validation/host";
 import { UserFacingError } from "./errors";
+import { samePhone } from "./verification-service";
 
 /**
  * Host onboarding. Every account starts as a TRAVELER (see
@@ -45,14 +46,34 @@ export async function becomeHost(userId: string, input: HostProfileInput) {
   });
 }
 
+/**
+ * While a host's verification is waiting for review or approved, the
+ * business name (shown to travelers) and contact phone (confirmed by our
+ * team) are what the admin checked, so the host can't change them.
+ */
+export function hostDetailsLocked(host: { verificationStatus: HostVerificationStatus }) {
+  return host.verificationStatus === "UNDER_REVIEW" || host.verificationStatus === "APPROVED";
+}
+
 export async function updateHostProfile(userId: string, input: HostProfileInput) {
-  const result = await prisma.hostProfile.updateMany({
-    where: { userId },
-    data: {
-      businessName: input.businessName,
-      contactPhone: input.contactPhone,
-      businessRegistrationNumber: input.businessRegistrationNumber ?? null,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "HostProfile" WHERE "userId" = ${userId} FOR UPDATE`;
+    const host = await tx.hostProfile.findUnique({ where: { userId } });
+    if (!host) throw new UserFacingError("Fill in your host details first.");
+    if (hostDetailsLocked(host) && (host.businessName !== input.businessName || !samePhone(host.contactPhone, input.contactPhone))) {
+      throw new UserFacingError(
+        host.verificationStatus === "APPROVED"
+          ? "Your business name and phone number were checked when you were verified, so they can't be changed here. Contact support to change them."
+          : "Your verification is waiting for review. Withdraw it on the Verification page before changing your business name or phone number."
+      );
+    }
+    await tx.hostProfile.update({
+      where: { id: host.id },
+      data: {
+        businessName: input.businessName,
+        contactPhone: input.contactPhone,
+        businessRegistrationNumber: input.businessRegistrationNumber ?? null,
+      },
+    });
   });
-  if (result.count === 0) throw new UserFacingError("Fill in your host details first.");
 }

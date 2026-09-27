@@ -63,6 +63,17 @@ export default async function AdminPropertyReviewPage({ params }: { params: Prom
         ({host.user.name}, {host.user.email}, {host.contactPhone}){host.suspendedAt ? " · SUSPENDED" : ""}
         {property.approvedAt && ` · First approved ${formatDateTime(property.approvedAt)}`}
       </p>
+      {host.verificationStatus !== "APPROVED" && (
+        <div className={styles.noticeWarn}>
+          <p>
+            <strong>This host isn&rsquo;t verified yet.</strong> You can approve the listing now, but travelers won&rsquo;t see it
+            until you verify the host.{" "}
+            <Link className={styles.link} href={`/dashboard/admin/hosts/${property.hostProfileId}`}>
+              Check their verification →
+            </Link>
+          </p>
+        </div>
+      )}
 
       {pendingNew && (
         <section className={styles.section}>

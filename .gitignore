@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Local photo uploads when no Vercel Blob token is set (development only)
 /public/dev-uploads/
+
+# Local verification documents when no private Blob token is set (development only)
+/.private-uploads/

@@ -31,3 +31,8 @@ New decisions are added below, newest last, each with its date:
   - Search shows "from USD X / night + service charge & taxes" without dates, and with dates the total incl. service charge and T-GST, with green tax per visitor noted separately. The booking page shows the exact breakdown.
   - The default commission rate is now set in admin Settings (10%). Per-host rates wait for the business-model decision.
 - **Commission visibility (2026-09-27):** commission is private between the host and the platform. Travelers never see it; they only see the room price, service charge and taxes. Hosts see it in their booking emails, bookings and monthly statements.
+- **Host verification, details (2026-09-27):**
+  - Listings of hosts who aren't verified are hidden from travelers, including listings that were already live. Admins may approve a listing before its host is verified; it stays hidden until the host is.
+  - Until an SMS provider is set up, the admin confirms the host's phone number by calling them and ticking "Phone confirmed by call" when approving. Twilio will be added later for SMS codes.
+  - Once a host submits for verification, and after they're verified, they can't change their business name or phone number themselves (contact support). An admin can remove a host's verification (e.g. an expired licence), which hides their listings until they're approved again.
+- **Verification document retention (2026-09-27):** rejected or replaced files are deleted straight away. Approved documents are kept while the host is active, and an admin can delete them anytime with one click.

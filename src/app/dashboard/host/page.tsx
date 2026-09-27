@@ -47,10 +47,44 @@ export default async function HostDashboardPage() {
       <h1 className={styles.pageTitle}>Host dashboard</h1>
       <p className={styles.pageHint}>
         {profile.businessName} · {profile.contactPhone} ·{" "}
+        {profile.verificationStatus === "APPROVED" ? (
+          <span className={styles.badgeAPPROVED}>Verified host</span>
+        ) : (
+          <Link className={styles.link} href="/dashboard/host/verification">
+            Not verified yet
+          </Link>
+        )}{" "}
+        ·{" "}
         <Link className={styles.link} href="/dashboard/host/profile">
           Edit host details
         </Link>
       </p>
+      {profile.verificationStatus !== "APPROVED" && (
+        <div className={profile.verificationStatus === "UNDER_REVIEW" ? styles.notice : styles.noticeWarn}>
+          <p>
+            {profile.verificationStatus === "UNDER_REVIEW" ? (
+              <>
+                <strong>Your verification is being reviewed.</strong> Your listings will be visible to travelers once our team
+                approves it.
+              </>
+            ) : profile.verificationStatus === "PENDING" ? (
+              <>
+                <strong>Verify your business to go live.</strong> Travelers only see listings from verified hosts. Send us your
+                tourism licence and documents; it takes about 10 minutes.
+              </>
+            ) : (
+              <>
+                <strong>Your verification needs changes.</strong> Your listings are hidden from travelers until it&rsquo;s approved.
+              </>
+            )}
+          </p>
+          <p>
+            <Link className={styles.link} href="/dashboard/host/verification">
+              {profile.verificationStatus === "UNDER_REVIEW" ? "See your verification →" : "Go to verification →"}
+            </Link>
+          </p>
+        </div>
+      )}
       {roomsToCheck.length > 0 && (
         <div className={styles.noticeWarn}>
           <p>
@@ -118,6 +152,11 @@ export default async function HostDashboardPage() {
                     {p._count.rooms === 1 ? "" : "s"}
                   </span>
                   <StatusBadge status={p.status} hasPendingChanges={p.changesSubmittedAt !== null} />
+                  {p.status === "APPROVED" && profile.verificationStatus !== "APPROVED" && (
+                    <span className={styles.muted} style={{ display: "block", fontSize: "0.8125rem", marginTop: 4 }}>
+                      Hidden from travelers until you&rsquo;re verified
+                    </span>
+                  )}
                 </span>
               </Link>
             ))}

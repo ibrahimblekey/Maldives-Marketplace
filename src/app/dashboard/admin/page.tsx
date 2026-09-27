@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireRole, ForbiddenError, UnauthenticatedError } from "@/server/auth/authorize";
 import { prisma } from "@/lib/db";
 import { todayInMaldives } from "@/lib/stay-pricing";
+import { countVerificationsWaiting } from "@/server/services/verification-service";
 import styles from "../dashboard.module.css";
 
 /** Protected admin route — only ADMIN and SUPER_ADMIN may reach this page. */
@@ -21,6 +22,7 @@ export default async function AdminDashboardPage() {
   }
 
   const openReports = await prisma.listingReport.count({ where: { status: "OPEN" } });
+  const verificationsWaiting = await countVerificationsWaiting();
   const overdueCount = await prisma.commissionStatement.count({
     where: { status: "DUE", dueDate: { lt: todayInMaldives() } },
   });
@@ -49,6 +51,11 @@ export default async function AdminDashboardPage() {
       <p>
         <Link href="/dashboard/admin/reports" style={{ color: openReports > 0 ? "#b3261e" : "#0e7c86", fontWeight: 600 }}>
           Listing reports{openReports > 0 ? ` (${openReports} open)` : ""} →
+        </Link>
+      </p>
+      <p>
+        <Link href="/dashboard/admin/hosts?show=verification" style={{ color: "#0e7c86", fontWeight: 600 }}>
+          Host verification{verificationsWaiting > 0 ? ` (${verificationsWaiting} waiting)` : ""} →
         </Link>
       </p>
       <p>

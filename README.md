@@ -4,8 +4,51 @@ Milestones built so far: project setup, database schema, authentication,
 admin management of the Country → Atoll → Island location hierarchy, host
 property listings with admin review, public search + property pages,
 bookings (pay at the property) with monthly commission billing, email
-notifications, and anti-scam tools. No online payments yet — see
+notifications, anti-scam tools, taxes & charges, and host verification.
+No online payments yet — see
 [Project architecture](#project-architecture).
+
+## Host verification
+
+Per `docs/decisions.md` → "Host verification". Logic in
+`src/server/services/verification-service.ts`.
+
+- **Only verified hosts' listings are shown or bookable.**
+  `hostInGoodStanding()` requires `verificationStatus = APPROVED`, so this
+  applies to search, property pages, booking and reports alike. Admins can
+  approve a listing before its host is verified; it just stays hidden.
+- **Host → Verification** (`/dashboard/host/verification`): licence or
+  permit number, business name and island as written on the licence, and
+  uploads (PDF or photo, up to 3 files each) of the tourism licence,
+  business registration, TGST certificate and owner ID. Then **Submit**.
+  While waiting for review everything is locked (the host can withdraw).
+  Business name and contact phone can't be changed once submitted/verified.
+- **Admin → Hosts → Waiting for verification:** open each document, compare
+  the licence island with the listings' islands (flagged when different),
+  then **Approve**, or **Send back** with a note, ticking the files that must
+  be uploaded again (they're deleted immediately). A verified host can have
+  verification removed (listings hidden at once), and all their documents
+  can be deleted with one click. Every decision and every document opening
+  is audit-logged; the host is emailed each outcome.
+- **Phone number:** until an SMS provider (Twilio) is set up, the admin
+  calls the host and ticks "I called … and confirmed it" when approving.
+- **"✓ Verified host"** badge on search cards and property pages.
+
+### Verification document storage (private Vercel Blob)
+
+Documents are never stored in the public photo store. Photos are shrunk in
+the browser (max 2400 px, JPEG); PDFs are sent as they are (max 4 MB). The
+server checks the bytes (only JPEG/PNG/WebP/PDF) before storing them.
+
+- **Production:** a separate **private** Vercel Blob store, connected to the
+  project with the environment-variable prefix `PRIVATE_BLOB`, which creates
+  `PRIVATE_BLOB_READ_WRITE_TOKEN`. Without it, uploads fail with a clear
+  message. Private files can't be opened from their URL: admins open them
+  through `/api/admin/verification-documents/[id]`, which checks the role,
+  logs the opening, and sends `Cache-Control: no-store` (images also get a
+  sandboxing Content-Security-Policy).
+- **Local development without a token:** files go to `.private-uploads/`
+  (git-ignored, outside `public/`).
 
 ## Taxes & charges
 

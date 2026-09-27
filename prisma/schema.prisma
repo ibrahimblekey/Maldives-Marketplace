@@ -305,6 +305,24 @@ model HostProfile {
   suspensionReason  String?
   suspendedByUserId String?
 
+  // Host verification (docs/decisions.md → "Host verification"). While
+  // verificationStatus isn't APPROVED, none of this host's listings are
+  // shown or bookable (hostInGoodStanding). The host fills in the licence
+  // details and uploads VerificationDocuments, then submits; an admin
+  // approves or rejects. See verification-service.ts.
+  licenceNumber               String?
+  licenceBusinessName         String?
+  licenceIslandId             String?
+  licenceIsland               Island?   @relation("HostLicenceIsland", fields: [licenceIslandId], references: [id], onDelete: SetNull)
+  verificationSubmittedAt     DateTime?
+  verificationRejectionReason String?
+  // The contact phone number confirmed for this host, how ("ADMIN_CALL"
+  // until an SMS provider is set up, then "SMS") and when. Only counts
+  // while it still equals contactPhone.
+  phoneConfirmedNumber String?
+  phoneConfirmedMethod String?
+  phoneConfirmedAt     DateTime?
+
   @@index([verificationStatus])
 }
 
@@ -314,8 +332,14 @@ model VerificationDocument {
   hostProfileId String
   hostProfile   HostProfile @relation(fields: [hostProfileId], references: [id], onDelete: Cascade)
 
-  documentType String // e.g. "business_license", "id_document"
+  documentType String // see VERIFICATION_DOCUMENT_TYPES in verification-service.ts
+  // Private storage reference (a private Vercel Blob URL, or "local:..." in
+  // development). Never shown to anyone: admins open documents through
+  // /api/admin/verification-documents/[id], which checks the role.
   fileUrl      String
+  fileName     String // as uploaded, for display only
+  contentType  String
+  sizeBytes    Int
 
   status           VerificationDocumentStatus @default(PENDING)
   reviewedByAdminId String?
@@ -371,7 +395,8 @@ model Island {
   atollId String
   atoll   Atoll  @relation(fields: [atollId], references: [id], onDelete: Restrict)
 
-  properties Property[]
+  properties    Property[]
+  licensedHosts HostProfile[] @relation("HostLicenceIsland")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

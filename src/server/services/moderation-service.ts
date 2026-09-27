@@ -83,8 +83,10 @@ export async function assertHostNotSuspended(userId: string) {
 // Admin: hosts
 // ---------------------------------------------------------------------------
 
-export async function listHosts(filter: "all" | "suspended" | "reported", search?: string) {
+export async function listHosts(filter: "all" | "verification" | "unverified" | "suspended" | "reported", search?: string) {
   const where: Prisma.HostProfileWhereInput = {
+    ...(filter === "verification" ? { verificationStatus: "UNDER_REVIEW" } : {}),
+    ...(filter === "unverified" ? { verificationStatus: { not: "APPROVED" } } : {}),
     ...(filter === "suspended" ? { suspendedAt: { not: null } } : {}),
     ...(filter === "reported" ? { properties: { some: { reports: { some: { status: "OPEN" } } } } } : {}),
     ...(search
@@ -100,7 +102,10 @@ export async function listHosts(filter: "all" | "suspended" | "reported", search
   };
   const hosts = await prisma.hostProfile.findMany({
     where,
-    orderBy: [{ suspendedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    orderBy:
+      filter === "verification"
+        ? [{ verificationSubmittedAt: "asc" }]
+        : [{ suspendedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: 200,
     include: {
       user: { select: { name: true, email: true } },
@@ -121,6 +126,12 @@ export async function getHostForAdmin(hostProfileId: string) {
     where: { id: hostProfileId },
     include: {
       user: { select: { name: true, email: true, createdAt: true } },
+      licenceIsland: { select: { id: true, name: true, atoll: { select: { name: true } } } },
+      // fileUrl deliberately not selected: documents open only through the admin document route.
+      verificationDocuments: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, documentType: true, fileName: true, contentType: true, sizeBytes: true, createdAt: true },
+      },
       properties: {
         orderBy: { createdAt: "desc" },
         select: {
@@ -128,7 +139,7 @@ export async function getHostForAdmin(hostProfileId: string) {
           name: true,
           slug: true,
           status: true,
-          island: { select: { name: true } },
+          island: { select: { id: true, name: true } },
           reports: { orderBy: { createdAt: "desc" }, select: { id: true, reason: true, status: true, createdAt: true } },
         },
       },
@@ -151,7 +162,10 @@ export async function getHostForAdmin(hostProfileId: string) {
   const suspendedBy = host.suspendedByUserId
     ? await prisma.user.findUnique({ where: { id: host.suspendedByUserId }, select: { name: true } })
     : null;
-  return { host, upcomingBookings, suspendedBy };
+  const verifiedBy = host.verifiedByAdminId
+    ? await prisma.user.findUnique({ where: { id: host.verifiedByAdminId }, select: { name: true } })
+    : null;
+  return { host, upcomingBookings, suspendedBy, verifiedBy };
 }
 
 // ---------------------------------------------------------------------------

@@ -160,5 +160,6 @@
 .priceBreakdown { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #e5eaec; padding-top: 12px; }
 .breakdownRow { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9375rem; color: #33474e; }
 .localsBadge { display: inline-block; background: #e5eefc; color: #1f4e9c; font-weight: 600; font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; }
+.verifiedBadge { display: inline-block; background: #dff3e6; color: #1e6b3a; font-weight: 600; font-size: 0.75rem; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
 .taxNote { font-size: 0.8125rem; color: #5f7479; }
 .breakdownRow span:last-child { white-space: nowrap; }

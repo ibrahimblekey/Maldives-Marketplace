@@ -126,7 +126,11 @@ export default async function StayPage({ params, searchParams }: Props) {
       <h1 className={styles.propertyTitle}>{property.name}</h1>
       <p className={styles.muted} style={{ marginTop: 6 }}>
         {property.propertyType.name} · {property.island.name}, {property.island.atoll.name} · Hosted by{" "}
-        {property.hostProfile.businessName}
+        {property.hostProfile.businessName}{" "}
+        {/* Only verified hosts' listings can be shown at all (hostInGoodStanding). */}
+        <span className={styles.verifiedBadge} title="Our team checked this host's tourism licence, business documents and phone number">
+          ✓ Verified host
+        </span>
       </p>
       {isPrivate && (
         <p style={{ marginTop: 8 }}>
